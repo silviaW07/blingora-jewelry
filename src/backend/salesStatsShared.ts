@@ -90,16 +90,25 @@ export function computedOrderAmount(goodsAmount: number | null, usdShipping: num
   return Math.round(((goodsAmount || 0) + (usdShipping || 0)) * 100) / 100
 }
 
+/** 压缩单元格里的换行/空格，兼容「2026. 7 月」「2026.\n7\n月」 */
+export function compactPeriodText(raw: unknown): string {
+  return String(raw ?? '')
+    .replace(/[\u00a0\u3000]/g, ' ')
+    .replace(/[\r\n\t]+/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+}
+
 const PERIOD_TITLE_RE =
-  /(?:((?:19|20)\d{2})\s*[.年/\-])?\s*(\d{1,2})\s*(?:月)?\s*[-~～—到至]\s*(\d{1,2})\s*月?|(?:((?:19|20)\d{2})\s*[.年/\-])\s*(\d{1,2})\s*月|^(\d{1,2})\s*月$/
+  /^(?:((?:19|20)\d{2})[.年/\-])?(\d{1,2})(?:月)?[-~～—到至](\d{1,2})月$|^(?:((?:19|20)\d{2})[.年/\-])(\d{1,2})月$|^(\d{1,2})月$/
 
 export function isPeriodTitleText(raw: string): boolean {
-  const value = String(raw || '').replace(/\s+/g, '')
+  const value = compactPeriodText(raw)
   if (!value || value.length > 40) return false
-  if (/姓名|地址|订单|商品|运费|电话|备注|重量|客户|短袖|拖鞋|包包/.test(value)) return false
+  if (/姓名|地址|订单|商品|运费|电话|备注|重量|客户|短袖|拖鞋|包包|日期/.test(value)) return false
   // 订单日期如 7.1 / 7/22 不是表标题
   if (/^\d{1,2}[.\/\-]\d{1,2}$/.test(value)) return false
-  return PERIOD_TITLE_RE.test(value)
+  return PERIOD_TITLE_RE.test(value) || /^(?:19|20)\d{2}[.年/\-]\d{1,2}(?:[-~～—到至]\d{1,2})?月?$/.test(value)
 }
 
 export function parsePeriodInfo(
@@ -108,12 +117,12 @@ export function parsePeriodInfo(
 ): { label: string; sortKey: number; canonicalKey: string } | null {
   const source = String(raw || '').trim()
   if (!source) return null
-  const compact = source.replace(/\s+/g, '')
+  const compact = compactPeriodText(source)
   // 明确排除订单日期，避免 7.1 被当成月份标题
   if (/^\d{1,2}[.\/\-]\d{1,2}$/.test(compact)) return null
   if (/^((?:19|20)\d{2})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/.test(compact)) return null
 
-  let match = compact.match(/(?:((?:19|20)\d{2})[.年/\-])?(\d{1,2})(?:月)?[-~～—到至](\d{1,2})月?/)
+  let match = compact.match(/^(?:((?:19|20)\d{2})[.年/\-])?(\d{1,2})(?:月)?[-~～—到至](\d{1,2})月?$/)
   if (match) {
     const year = Number(match[1] || fallbackYear)
     const startMonth = Number(match[2])
@@ -125,7 +134,8 @@ export function parsePeriodInfo(
     }
   }
 
-  match = compact.match(/(?:((?:19|20)\d{2})[.年/\-])(\d{1,2})月?/)
+  // 2026.7月 / 2026年7月 / 2026.7
+  match = compact.match(/^(?:((?:19|20)\d{2})[.年/\-])(\d{1,2})月?$/)
   if (match) {
     const year = Number(match[1])
     const month = Number(match[2])
@@ -154,7 +164,7 @@ export function parsePeriodInfo(
     return {
       label: source.slice(0, 40),
       sortKey: fallbackYear * 100,
-      canonicalKey: `custom:${source.slice(0, 40)}`,
+      canonicalKey: `custom:${compact.slice(0, 40)}`,
     }
   }
   return null
@@ -171,7 +181,7 @@ export function canonicalPeriodKey(label: string, sortKey = 0, fallbackYear = ne
 
 export function periodSalesLabel(label: string): string {
   const cleaned = String(label || '').trim()
-  if (!cleaned) return '未标注表标题销售额'
+  if (!cleaned || cleaned === '未标注表标题') return '销售额'
   if (/销售额$/.test(cleaned)) return cleaned
   return `${cleaned}销售额`
 }

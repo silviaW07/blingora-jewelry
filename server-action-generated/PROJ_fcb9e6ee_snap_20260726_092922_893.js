@@ -42009,10 +42009,41 @@ function buildShipmentLines(freightRaw, weightRaw, remarkRaw) {
 }
 function firstNonEmptyCell(row) {
     for (const item of row){
-        const value = text(item, 80);
+        const value = String(item !== null && item !== void 0 ? item : '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
         if (value) return value;
     }
     return '';
+}
+function extractSheetPeriodTitle(aoa, headerRow, headers, fallbackYear) {
+    // 1) 表头之前的标题行
+    for(let i = 0; i < headerRow; i += 1){
+        const row = Array.isArray(aoa[i]) ? aoa[i] : [];
+        const title = firstNonEmptyCell(row);
+        const parsed = (0, _salesStatsShared.parsePeriodInfo)(title, fallbackYear);
+        if (parsed) return {
+            label: parsed.label,
+            sortKey: parsed.sortKey
+        };
+    }
+    // 2) 表头第一格就是「2026. 7 月」这类日期标题（常见于你们业务表）
+    for (const header of headers.slice(0, 3)){
+        const parsed = (0, _salesStatsShared.parsePeriodInfo)(header, fallbackYear);
+        if (parsed) return {
+            label: parsed.label,
+            sortKey: parsed.sortKey
+        };
+    }
+    // 3) 再扫前几行首格，兼容标题与表头同一行/紧邻
+    for(let i = 0; i < Math.min(aoa.length, headerRow + 2); i += 1){
+        const row = Array.isArray(aoa[i]) ? aoa[i] : [];
+        const title = firstNonEmptyCell(row);
+        const parsed = (0, _salesStatsShared.parsePeriodInfo)(title, fallbackYear);
+        if (parsed) return {
+            label: parsed.label,
+            sortKey: parsed.sortKey
+        };
+    }
+    return null;
 }
 function isSectionTitleRow(row, idx) {
     const dateText = cell(row, idx.date);
@@ -42042,7 +42073,8 @@ function parseAoa(aoa, sheetTitleHint = '') {
     let headerRow = 0;
     for(let i = 0; i < Math.min(8, aoa.length); i += 1){
         const joined = (aoa[i] || []).map((item)=>String(item || '')).join(' ');
-        if (/日期|姓名|地址|订单金额|商品金额|运费成本|usd运费/i.test(joined)) {
+        // 姓名/电话/地址才是真正表头；日期格可能是「2026. 7 月」
+        if (/姓名|电话|地址|订单金额|商品金额|运费成本|usd运费|日期/i.test(joined)) {
             headerRow = i;
             break;
         }
@@ -42054,26 +42086,21 @@ function parseAoa(aoa, sheetTitleHint = '') {
     let current = null;
     let activePeriodLabel = '';
     let activePeriodSortKey = fallbackYear * 100 + 99;
-    // 只认表标题行（如 2026年7月 / 2026年8-9月），不看订单日期
-    for(let i = 0; i < headerRow; i += 1){
-        const row = Array.isArray(aoa[i]) ? aoa[i] : [];
-        const title = firstNonEmptyCell(row);
-        if (!(0, _salesStatsShared.isPeriodTitleText)(title)) continue;
-        const parsed = (0, _salesStatsShared.parsePeriodInfo)(title, fallbackYear);
-        if (parsed) {
-            activePeriodLabel = title;
-            activePeriodSortKey = parsed.sortKey;
-        }
-    }
-    if (!activePeriodLabel && sheetTitleHint && (0, _salesStatsShared.isPeriodTitleText)(sheetTitleHint)) {
+    const sheetPeriod = extractSheetPeriodTitle(aoa, headerRow, headers, fallbackYear);
+    if (sheetPeriod) {
+        activePeriodLabel = sheetPeriod.label;
+        activePeriodSortKey = sheetPeriod.sortKey;
+    } else if (sheetTitleHint) {
         const parsed = (0, _salesStatsShared.parsePeriodInfo)(sheetTitleHint, fallbackYear);
         if (parsed) {
-            activePeriodLabel = sheetTitleHint;
+            activePeriodLabel = parsed.label;
             activePeriodSortKey = parsed.sortKey;
         }
     }
+    // 没有表日期标题时也不再制造「未标注表标题」空白分组名；用文件名兜底
     if (!activePeriodLabel) {
-        activePeriodLabel = '未标注表标题';
+        const hint = (0, _salesStatsShared.compactPeriodText)(sheetTitleHint).slice(0, 40);
+        activePeriodLabel = hint || `导入表${orders.length + 1}`;
         activePeriodSortKey = fallbackYear * 100 + 99;
     }
     for(let r = headerRow + 1; r < aoa.length; r += 1){
@@ -42082,7 +42109,8 @@ function parseAoa(aoa, sheetTitleHint = '') {
         const sectionTitle = isSectionTitleRow(row, idx);
         if (sectionTitle) {
             const parsed = (0, _salesStatsShared.parsePeriodInfo)(sectionTitle, fallbackYear);
-            activePeriodLabel = sectionTitle;
+            // 表内分段标题保留原文字，优先规范成 2026年x月
+            activePeriodLabel = (parsed === null || parsed === void 0 ? void 0 : parsed.label) || sectionTitle;
             activePeriodSortKey = (parsed === null || parsed === void 0 ? void 0 : parsed.sortKey) || activePeriodSortKey;
             current = null;
             continue;
@@ -49413,6 +49441,9 @@ _export(exports, {
     get canonicalPeriodKey () {
         return canonicalPeriodKey;
     },
+    get compactPeriodText () {
+        return compactPeriodText;
+    },
     get compareSalesOrders () {
         return compareSalesOrders;
     },
@@ -49449,23 +49480,26 @@ function computedOrderAmount(goodsAmount, usdShipping) {
     if (goodsAmount == null && usdShipping == null) return null;
     return Math.round(((goodsAmount || 0) + (usdShipping || 0)) * 100) / 100;
 }
-const PERIOD_TITLE_RE = /(?:((?:19|20)\d{2})\s*[.年/\-])?\s*(\d{1,2})\s*(?:月)?\s*[-~～—到至]\s*(\d{1,2})\s*月?|(?:((?:19|20)\d{2})\s*[.年/\-])\s*(\d{1,2})\s*月|^(\d{1,2})\s*月$/;
+function compactPeriodText(raw) {
+    return String(raw !== null && raw !== void 0 ? raw : '').replace(/[\u00a0\u3000]/g, ' ').replace(/[\r\n\t]+/g, '').replace(/\s+/g, '').trim();
+}
+const PERIOD_TITLE_RE = /^(?:((?:19|20)\d{2})[.年/\-])?(\d{1,2})(?:月)?[-~～—到至](\d{1,2})月$|^(?:((?:19|20)\d{2})[.年/\-])(\d{1,2})月$|^(\d{1,2})月$/;
 function isPeriodTitleText(raw) {
-    const value = String(raw || '').replace(/\s+/g, '');
+    const value = compactPeriodText(raw);
     if (!value || value.length > 40) return false;
-    if (/姓名|地址|订单|商品|运费|电话|备注|重量|客户|短袖|拖鞋|包包/.test(value)) return false;
+    if (/姓名|地址|订单|商品|运费|电话|备注|重量|客户|短袖|拖鞋|包包|日期/.test(value)) return false;
     // 订单日期如 7.1 / 7/22 不是表标题
     if (/^\d{1,2}[.\/\-]\d{1,2}$/.test(value)) return false;
-    return PERIOD_TITLE_RE.test(value);
+    return PERIOD_TITLE_RE.test(value) || /^(?:19|20)\d{2}[.年/\-]\d{1,2}(?:[-~～—到至]\d{1,2})?月?$/.test(value);
 }
 function parsePeriodInfo(raw, fallbackYear = new Date().getFullYear()) {
     const source = String(raw || '').trim();
     if (!source) return null;
-    const compact = source.replace(/\s+/g, '');
+    const compact = compactPeriodText(source);
     // 明确排除订单日期，避免 7.1 被当成月份标题
     if (/^\d{1,2}[.\/\-]\d{1,2}$/.test(compact)) return null;
     if (/^((?:19|20)\d{2})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/.test(compact)) return null;
-    let match = compact.match(/(?:((?:19|20)\d{2})[.年/\-])?(\d{1,2})(?:月)?[-~～—到至](\d{1,2})月?/);
+    let match = compact.match(/^(?:((?:19|20)\d{2})[.年/\-])?(\d{1,2})(?:月)?[-~～—到至](\d{1,2})月?$/);
     if (match) {
         const year = Number(match[1] || fallbackYear);
         const startMonth = Number(match[2]);
@@ -49480,7 +49514,8 @@ function parsePeriodInfo(raw, fallbackYear = new Date().getFullYear()) {
             };
         }
     }
-    match = compact.match(/(?:((?:19|20)\d{2})[.年/\-])(\d{1,2})月?/);
+    // 2026.7月 / 2026年7月 / 2026.7
+    match = compact.match(/^(?:((?:19|20)\d{2})[.年/\-])(\d{1,2})月?$/);
     if (match) {
         const year = Number(match[1]);
         const month = Number(match[2]);
@@ -49507,7 +49542,7 @@ function parsePeriodInfo(raw, fallbackYear = new Date().getFullYear()) {
         return {
             label: source.slice(0, 40),
             sortKey: fallbackYear * 100,
-            canonicalKey: `custom:${source.slice(0, 40)}`
+            canonicalKey: `custom:${compact.slice(0, 40)}`
         };
     }
     return null;
@@ -49521,7 +49556,7 @@ function canonicalPeriodKey(label, sortKey = 0, fallbackYear = new Date().getFul
 }
 function periodSalesLabel(label) {
     const cleaned = String(label || '').trim();
-    if (!cleaned) return '未标注表标题销售额';
+    if (!cleaned || cleaned === '未标注表标题') return '销售额';
     if (/销售额$/.test(cleaned)) return cleaned;
     return `${cleaned}销售额`;
 }

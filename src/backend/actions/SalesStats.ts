@@ -8,6 +8,7 @@ import sharp from 'sharp'
 import {
   DEFAULT_SALES_META,
   canonicalPeriodKey,
+  compactPeriodText,
   compareSalesOrders,
   computedOrderAmount,
   isPeriodTitleText,
@@ -429,10 +430,38 @@ function buildShipmentLines(freightRaw: string, weightRaw: string, remarkRaw: st
 
 function firstNonEmptyCell(row: unknown[]): string {
   for (const item of row) {
-    const value = text(item, 80)
+    const value = String(item ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
     if (value) return value
   }
   return ''
+}
+
+function extractSheetPeriodTitle(
+  aoa: unknown[][],
+  headerRow: number,
+  headers: string[],
+  fallbackYear: number,
+): { label: string; sortKey: number } | null {
+  // 1) 表头之前的标题行
+  for (let i = 0; i < headerRow; i += 1) {
+    const row = Array.isArray(aoa[i]) ? aoa[i] : []
+    const title = firstNonEmptyCell(row)
+    const parsed = parsePeriodInfo(title, fallbackYear)
+    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey }
+  }
+  // 2) 表头第一格就是「2026. 7 月」这类日期标题（常见于你们业务表）
+  for (const header of headers.slice(0, 3)) {
+    const parsed = parsePeriodInfo(header, fallbackYear)
+    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey }
+  }
+  // 3) 再扫前几行首格，兼容标题与表头同一行/紧邻
+  for (let i = 0; i < Math.min(aoa.length, headerRow + 2); i += 1) {
+    const row = Array.isArray(aoa[i]) ? aoa[i] : []
+    const title = firstNonEmptyCell(row)
+    const parsed = parsePeriodInfo(title, fallbackYear)
+    if (parsed) return { label: parsed.label, sortKey: parsed.sortKey }
+  }
+  return null
 }
 
 function isSectionTitleRow(row: unknown[], idx: ReturnType<typeof resolveColumnIndexes>): string | null {
@@ -467,7 +496,8 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
   let headerRow = 0
   for (let i = 0; i < Math.min(8, aoa.length); i += 1) {
     const joined = (aoa[i] || []).map((item) => String(item || '')).join(' ')
-    if (/日期|姓名|地址|订单金额|商品金额|运费成本|usd运费/i.test(joined)) {
+    // 姓名/电话/地址才是真正表头；日期格可能是「2026. 7 月」
+    if (/姓名|电话|地址|订单金额|商品金额|运费成本|usd运费|日期/i.test(joined)) {
       headerRow = i
       break
     }
@@ -481,26 +511,21 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
   let activePeriodLabel = ''
   let activePeriodSortKey = fallbackYear * 100 + 99
 
-  // 只认表标题行（如 2026年7月 / 2026年8-9月），不看订单日期
-  for (let i = 0; i < headerRow; i += 1) {
-    const row = Array.isArray(aoa[i]) ? aoa[i] : []
-    const title = firstNonEmptyCell(row)
-    if (!isPeriodTitleText(title)) continue
-    const parsed = parsePeriodInfo(title, fallbackYear)
-    if (parsed) {
-      activePeriodLabel = title
-      activePeriodSortKey = parsed.sortKey
-    }
-  }
-  if (!activePeriodLabel && sheetTitleHint && isPeriodTitleText(sheetTitleHint)) {
+  const sheetPeriod = extractSheetPeriodTitle(aoa, headerRow, headers, fallbackYear)
+  if (sheetPeriod) {
+    activePeriodLabel = sheetPeriod.label
+    activePeriodSortKey = sheetPeriod.sortKey
+  } else if (sheetTitleHint) {
     const parsed = parsePeriodInfo(sheetTitleHint, fallbackYear)
     if (parsed) {
-      activePeriodLabel = sheetTitleHint
+      activePeriodLabel = parsed.label
       activePeriodSortKey = parsed.sortKey
     }
   }
+  // 没有表日期标题时也不再制造「未标注表标题」空白分组名；用文件名兜底
   if (!activePeriodLabel) {
-    activePeriodLabel = '未标注表标题'
+    const hint = compactPeriodText(sheetTitleHint).slice(0, 40)
+    activePeriodLabel = hint || `导入表${orders.length + 1}`
     activePeriodSortKey = fallbackYear * 100 + 99
   }
 
@@ -511,7 +536,8 @@ function parseAoa(aoa: unknown[][], sheetTitleHint = ''): SalesLedgerOrder[] {
     const sectionTitle = isSectionTitleRow(row, idx)
     if (sectionTitle) {
       const parsed = parsePeriodInfo(sectionTitle, fallbackYear)
-      activePeriodLabel = sectionTitle
+      // 表内分段标题保留原文字，优先规范成 2026年x月
+      activePeriodLabel = parsed?.label || sectionTitle
       activePeriodSortKey = parsed?.sortKey || activePeriodSortKey
       current = null
       continue

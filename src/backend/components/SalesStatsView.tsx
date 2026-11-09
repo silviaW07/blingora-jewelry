@@ -147,8 +147,8 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为追加拼接，按表标题（如
-              2026年7月 / 2026年8-9月）分组，不按订单日期拆分。
+              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为完整表格追加拼接：保留每张表的表头（姓名@电话等），用表日期（如
+              2026.7月 / 2026年8-9月）判断是否合并，不按订单日期拆分。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -240,26 +240,6 @@ export default function SalesStatsView({
 
         <div className="overflow-auto rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
           <table className="min-w-[1280px] w-full border-collapse text-base">
-            <thead>
-              <tr className="text-center text-[#1E293B]">
-                {COLUMN_ORDER.map((column) => (
-                  <th key={column.key} className={cn('border border-[#CBD5E1] px-2 py-3 font-semibold', column.tone)}>
-                    <EditableText
-                      value={meta.columns[column.key]}
-                      className="font-semibold"
-                      onCommit={(next) =>
-                        void handlers.updateMeta({
-                          columns: {
-                            ...meta.columns,
-                            [column.key]: next || DEFAULT_SALES_META.columns[column.key],
-                          },
-                        })
-                      }
-                    />
-                  </th>
-                ))}
-              </tr>
-            </thead>
             <tbody>
               {state.loading ? (
                 <tr>
@@ -277,12 +257,47 @@ export default function SalesStatsView({
                 orders.flatMap((order, orderIndex) => {
                   const span = Math.max(1, order.lines.length)
                   const prev = orderIndex > 0 ? orders[orderIndex - 1] : null
-                  const showPeriodHeader =
+                  const showTableChrome =
                     !prev ||
                     prev.periodLabel !== order.periodLabel ||
                     prev.periodSortKey !== order.periodSortKey
+                  const headerRow = (
+                    <tr key={`thead-${order.periodSortKey}-${order.periodLabel}-${order.id}`} className="text-center text-[#1E293B]">
+                      {COLUMN_ORDER.map((column) => (
+                        <th
+                          key={`${order.id}-h-${column.key}`}
+                          className={cn('border border-[#CBD5E1] px-2 py-3 font-semibold', column.tone)}
+                        >
+                          {column.key === 'date' ? (
+                            <EditableText
+                              value={order.periodLabel || meta.columns.date}
+                              className="font-semibold"
+                              onCommit={(next) =>
+                                updateOrder(order.id, {
+                                  periodLabel: next || order.periodLabel,
+                                })
+                              }
+                            />
+                          ) : (
+                            <EditableText
+                              value={meta.columns[column.key]}
+                              className="font-semibold"
+                              onCommit={(next) =>
+                                void handlers.updateMeta({
+                                  columns: {
+                                    ...meta.columns,
+                                    [column.key]: next || DEFAULT_SALES_META.columns[column.key],
+                                  },
+                                })
+                              }
+                            />
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  )
                   const rows = order.lines.map((line, index) => (
-                    <tr key={`${order.id}-${index}`} className={cn(index === 0 ? 'border-t-2 border-t-[#94A3B8]' : '')}>
+                    <tr key={`${order.id}-${index}`} className={cn(index === 0 ? 'border-t border-t-[#CBD5E1]' : '')}>
                       {index === 0 ? (
                         <>
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle whitespace-nowrap">
@@ -358,29 +373,9 @@ export default function SalesStatsView({
                       </td>
                     </tr>
                   ))
-                  if (!showPeriodHeader) return rows
-                  return [
-                    <tr key={`period-${order.periodSortKey}-${order.periodLabel}-${order.id}`}>
-                      <td
-                        colSpan={10}
-                        className="border border-[#BFDBFE] bg-[#DBEAFE] px-4 py-3 text-left font-semibold text-[#1E3A8A]"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <EditableText
-                            value={order.periodLabel || '未标注表标题'}
-                            className="text-left font-semibold text-[#1E3A8A]"
-                            onCommit={(next) =>
-                              updateOrder(order.id, {
-                                periodLabel: next || '未标注表标题',
-                              })
-                            }
-                          />
-                          <span className="text-sm font-medium text-[#1D4ED8]">{meta.columns.namePhone}</span>
-                        </div>
-                      </td>
-                    </tr>,
-                    ...rows,
-                  ]
+                  // 完整表格拼接：每个月份表保留自己的表头行（日期格显示表标题如 2026年7月，其余为姓名@电话等）
+                  if (!showTableChrome) return rows
+                  return [headerRow, ...rows]
                 })
               )}
             </tbody>
