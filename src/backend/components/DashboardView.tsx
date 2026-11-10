@@ -43,7 +43,7 @@ export default function DashboardView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-controller-name="KPI统计卡片">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" data-controller-name="KPI统计卡片">
             {(() => {
               const kpi = state.kpiStats;
               const listed = kpi?.listedProductCount ?? kpi?.totalProductCount ?? 0;
@@ -80,22 +80,6 @@ export default function DashboardView({
               <div className="space-y-1">
                 <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.totalCustomerCount ?? 0)}</p>
                 <p className="text-[11px] text-[#94A3B8]">本周新注册 {fmt(kpi?.newRegisteredUserCount ?? 0)} · 点击查看周月年明细</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handlers.handleNavigateToSalesStats()}
-              className={`${cardCls} cursor-pointer`}
-            >
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF6A00]" />
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-medium text-[#64748B]">销售额统计</span>
-                <span className="text-[10px] font-semibold text-[#FF6A00]">详情 →</span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold font-mono text-[#1E293B] tracking-tight">{state.isInitializing ? "—" : fmt(kpi?.totalOrderCount ?? 0)}</p>
-                <p className="text-[11px] text-[#94A3B8]">表格导入 / 图片识别 · 点击查看</p>
               </div>
             </button>
               </>;

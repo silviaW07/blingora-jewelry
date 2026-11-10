@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ChevronDown, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Link2, Camera, X } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ChevronDown, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Link2, Camera, X, TrendingUp } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
 import { formatBadgeCount, useAdminNavBadges } from '@/backend/hooks/useAdminNavBadges';
@@ -83,6 +83,14 @@ const MENU_ITEMS = [{
   icon: ShoppingCart,
   roles: ['ADMIN', 'SUB_ADMIN'],
   permission: 'orders'
+},
+{
+  id: 'B24',
+  label: '销售额统计',
+  href: '/dashboard/sales',
+  icon: TrendingUp,
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'dashboard'
 }, {
   id: 'B14',
   label: 'Banner轮播图管理',

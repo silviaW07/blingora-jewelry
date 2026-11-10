@@ -484,6 +484,7 @@ export const PAGE_ID_MAP: Record<string, string> = {
   'B16': 'ShippingChannelConfig',
   'B19': 'AdminManagement',
   'B20': 'BrandAliasManagement',
+  'B24': 'SalesStats',
   'B23': 'SupplierCollection',
 };
 
