@@ -224,10 +224,24 @@ export function periodSalesLabel(label: string): string {
 export function compareSalesOrders(a: SalesLedgerOrder, b: SalesLedgerOrder): number {
   const ak = Number(a.periodSortKey || 0)
   const bk = Number(b.periodSortKey || 0)
-  if (ak !== bk) return ak - bk
-  const labelCmp = String(a.periodLabel || '').localeCompare(String(b.periodLabel || ''))
+  // 近的月份排前面：10月 → 9月
+  if (ak !== bk) return bk - ak
+  const labelCmp = String(b.periodLabel || '').localeCompare(String(a.periodLabel || ''))
   if (labelCmp !== 0) return labelCmp
   return String(a.id).localeCompare(String(b.id))
+}
+
+export function comparePeriodStats<T extends { sortKey: number; label: string }>(a: T, b: T): number {
+  if (a.sortKey !== b.sortKey) return b.sortKey - a.sortKey
+  return String(b.label || '').localeCompare(String(a.label || ''))
+}
+
+export function isBackendSyncedSalesOrderId(id: string): boolean {
+  return String(id || '').startsWith('order:')
+}
+
+export function backendSalesOrderId(orderId: string): string {
+  return `order:${String(orderId || '').trim()}`
 }
 
 export function createBlankSalesOrder(input?: {

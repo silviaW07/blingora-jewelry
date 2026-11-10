@@ -9,11 +9,13 @@ import {
   importSalesStatsImage,
   importSalesStatsSheet,
   saveSalesStatsLedger,
+  syncSalesStatsFromOrders,
 } from '@/backend/actions/SalesStats'
 import {
   DEFAULT_COLUMN_LABELS,
   DEFAULT_SALES_META,
   canonicalPeriodKey,
+  comparePeriodStats,
   compareSalesOrders,
   computedOrderAmount,
   createBlankSalesOrder,
@@ -90,7 +92,7 @@ function buildSummary(orders: SalesLedgerOrder[]): SalesStatsSummary {
         usdShippingTotal: Math.round(item.usdShippingTotal * 100) / 100,
         freightCostTotal: Math.round(item.freightCostTotal * 100) / 100,
       }))
-      .sort((a, b) => a.sortKey - b.sortKey || a.label.localeCompare(b.label)),
+      .sort(comparePeriodStats),
   }
 }
 
@@ -208,6 +210,19 @@ export function useSalesStats() {
       toast.success('已清空')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '清空失败')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const syncFromOrders = async () => {
+    setImporting(true)
+    try {
+      const next = await syncSalesStatsFromOrders()
+      setDetail(next)
+      toast.success(`已同步 ${next.syncedCount || 0} 笔后台已付款订单到对应月份表`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '同步订单失败')
     } finally {
       setImporting(false)
     }
@@ -438,6 +453,7 @@ export function useSalesStats() {
       importSheet,
       importImage,
       clearLedger,
+      syncFromOrders,
       createBlankSheet,
       addBlankOrder,
       addShipmentLine,

@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ArrowLeft, FileSpreadsheet, ImagePlus, Plus, Table2, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, ImagePlus, Plus, RefreshCw, Table2, Trash2 } from 'lucide-react'
 import { canonicalPeriodKey } from '@/backend/salesStatsShared'
 import type { useSalesStats } from '@/backend/hooks/useSalesStats'
 import type { SalesColumnKey, SalesLedgerOrder } from '@/backend/salesStatsShared'
@@ -187,7 +187,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。可新建空白工作表手动填写；导入为追加拼接；点击下方表标题可切换顶部汇总到对应月份。
+              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。月份近的表排前面；当年 10 月及以后的已付款订单（处理中/已发货等）自动同步到对应月份表。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -195,6 +195,15 @@ export default function SalesStatsView({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={state.importing || state.saving || state.loading || !state.detail}
+              onClick={() => void handlers.syncFromOrders()}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {state.importing ? '同步中…' : '同步订单'}
+            </Button>
             <Button
               type="button"
               variant="outline"

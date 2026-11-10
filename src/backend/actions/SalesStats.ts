@@ -10,8 +10,11 @@ import {
   DEFAULT_COLUMN_LABELS,
   canonicalPeriodKey,
   compactPeriodText,
+  backendSalesOrderId,
+  comparePeriodStats,
   compareSalesOrders,
   computedOrderAmount,
+  isBackendSyncedSalesOrderId,
   isPeriodTitleText,
   normalizeHeaderLabels,
   parsePeriodInfo,
@@ -124,7 +127,7 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
       usdShippingTotal: Math.round(item.usdShippingTotal * 100) / 100,
       freightCostTotal: Math.round(item.freightCostTotal * 100) / 100,
     }))
-    .sort((a, b) => a.sortKey - b.sortKey || a.label.localeCompare(b.label))
+    .sort(comparePeriodStats)
 
   return {
     orderCount: orders.length,
@@ -896,10 +899,222 @@ async function recognizeSalesImage(fileBase64: string): Promise<SalesLedgerOrder
   return orders
 }
 
+const SYNC_PAID_STATUSES = ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] as const
+
+/** 同步起点：当年 10 月 1 日（上海时区日历）及以后 */
+function salesSyncStartDate(now = new Date()): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(now)
+  const year = Number(parts.find((part) => part.type === 'year')?.value || now.getUTCFullYear())
+  // Asia/Shanghai = UTC+8，用 UTC 存 10-01 00:00+08 = 9-30 16:00Z
+  return new Date(Date.UTC(year, 9, 1, -8, 0, 0))
+}
+
+function shanghaiDateParts(value: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(value)
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+  const day = Number(parts.find((part) => part.type === 'day')?.value)
+  return { year, month, day }
+}
+
+function formatAddressFromRecord(address: {
+  recipientName?: string | null
+  phone?: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  cityName?: string | null
+  stateName?: string | null
+  postalCode?: string | null
+  countryName?: string | null
+} | null | undefined, fallbackText = '') {
+  if (fallbackText.trim()) return text(fallbackText, 500)
+  if (!address) return ''
+  return [
+    address.addressLine1,
+    address.addressLine2,
+    [address.cityName, address.stateName, address.postalCode].filter(Boolean).join(', '),
+    address.countryName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500)
+}
+
+function mapBackendOrderToSales(record: {
+  id: string
+  createdAt: Date
+  subtotalAmount: { toNumber(): number } | number
+  shippingAmount: { toNumber(): number } | number
+  totalAmount: { toNumber(): number } | number
+  trackingNumber: string | null
+  registerInfoJson: unknown
+  user: { username: string; phone: string | null }
+  address: {
+    recipientName: string
+    phone: string | null
+    addressLine1: string
+    addressLine2: string | null
+    cityName: string | null
+    stateName: string | null
+    postalCode: string | null
+    countryName: string
+  } | null
+}): SalesLedgerOrder {
+  const { year, month, day } = shanghaiDateParts(new Date(record.createdAt))
+  const periodLabel = `${year}年${month}月`
+  const periodSortKey = year * 100 + month
+  const info =
+    record.registerInfoJson && typeof record.registerInfoJson === 'object' && !Array.isArray(record.registerInfoJson)
+      ? (record.registerInfoJson as Record<string, unknown>)
+      : {}
+  const customerName = text(info.customerName || record.address?.recipientName || record.user.username, 100)
+  const phone = text(info.phone || record.address?.phone || record.user.phone || '', 40)
+  const address = formatAddressFromRecord(record.address, String(info.address || ''))
+  const goodsAmount = money(typeof record.subtotalAmount === 'object' ? record.subtotalAmount.toNumber() : record.subtotalAmount)
+  const shippingFallback = money(
+    typeof record.shippingAmount === 'object' ? record.shippingAmount.toNumber() : record.shippingAmount,
+  )
+  const usdShipping = money(info.usdShipping) ?? shippingFallback
+  const deposit = money(info.depositText ?? info.deposit)
+  const orderAmount = computedOrderAmount(goodsAmount, usdShipping)
+  const freightLines = Array.isArray(info.freightLines) ? info.freightLines : []
+  const lines: SalesShipmentLine[] = freightLines.flatMap((line) => {
+    if (!line || typeof line !== 'object' || Array.isArray(line)) return []
+    const row = line as Record<string, unknown>
+    const freightCost = text(row.freightCost, 40)
+    const chargeWeight = text(row.chargeWeight, 40)
+    const remark = text(row.remark || record.trackingNumber || '', 200)
+    if (!freightCost && !chargeWeight && !remark) return []
+    return [{ freightCost, chargeWeight, remark }]
+  })
+  if (!lines.length) {
+    lines.push({
+      freightCost: '',
+      chargeWeight: '',
+      remark: text(record.trackingNumber || '', 200),
+    })
+  }
+  return {
+    id: backendSalesOrderId(record.id),
+    dateText: `${month}.${day}`,
+    customerName,
+    phone,
+    address,
+    orderAmount,
+    goodsAmount,
+    usdShipping,
+    deposit,
+    periodLabel,
+    periodSortKey,
+    headerLabels: normalizeHeaderLabels({ ...DEFAULT_COLUMN_LABELS, date: periodLabel }, periodLabel),
+    lines,
+  }
+}
+
+async function loadBackendSyncedSalesOrders(): Promise<SalesLedgerOrder[]> {
+  const startAt = salesSyncStartDate()
+  const records = await prisma.orderrecord.findMany({
+    where: {
+      status: { in: [...SYNC_PAID_STATUSES] },
+      createdAt: { gte: startAt },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      createdAt: true,
+      subtotalAmount: true,
+      shippingAmount: true,
+      totalAmount: true,
+      trackingNumber: true,
+      registerInfoJson: true,
+      user: { select: { username: true, phone: true } },
+      address: {
+        select: {
+          recipientName: true,
+          phone: true,
+          addressLine1: true,
+          addressLine2: true,
+          cityName: true,
+          stateName: true,
+          postalCode: true,
+          countryName: true,
+        },
+      },
+    },
+    take: 2000,
+  })
+  return normalizeOrders(records.map((record) => mapBackendOrderToSales(record)))
+}
+
+function mergeLedgerWithBackendOrders(
+  currentOrders: SalesLedgerOrder[],
+  syncedOrders: SalesLedgerOrder[],
+): SalesLedgerOrder[] {
+  const manual = currentOrders.filter((order) => !isBackendSyncedSalesOrderId(order.id))
+  return normalizeOrders([...manual, ...syncedOrders])
+}
+
+async function syncLedgerFromBackendOrders(forceWrite = false): Promise<{
+  orders: SalesLedgerOrder[]
+  meta: SalesStatsMeta
+  updatedAt: string
+  syncedCount: number
+  changed: boolean
+}> {
+  const current = await readLedger()
+  const synced = await loadBackendSyncedSalesOrders()
+  const next = mergeLedgerWithBackendOrders(current.orders, synced)
+  const before = JSON.stringify(current.orders)
+  const after = JSON.stringify(next)
+  const changed = before !== after
+  if (changed || forceWrite) {
+    await writeLedger(next, current.meta)
+    const saved = await readLedger()
+    return {
+      orders: saved.orders,
+      meta: saved.meta,
+      updatedAt: saved.updatedAt,
+      syncedCount: synced.length,
+      changed,
+    }
+  }
+  return {
+    orders: current.orders,
+    meta: current.meta,
+    updatedAt: current.updatedAt,
+    syncedCount: synced.length,
+    changed: false,
+  }
+}
+
 export const getSalesStatsDetail = requireStaff('dashboard')(
   withResult(async (): Promise<SalesStatsDetail> => {
-    const { orders, meta, updatedAt } = await readLedger()
-    return detailFrom(orders, meta, updatedAt)
+    // 打开页面时自动把 10 月及以后已付款订单同步进对应月份表
+    const synced = await syncLedgerFromBackendOrders(false)
+    return detailFrom(synced.orders, synced.meta, synced.updatedAt)
+  }),
+)
+
+export const syncSalesStatsFromOrders = requireStaff('dashboard')(
+  withResult(async (): Promise<SalesStatsDetail & { syncedCount: number }> => {
+    getAuthContext()
+    const synced = await syncLedgerFromBackendOrders(true)
+    return {
+      ...detailFrom(synced.orders, synced.meta, synced.updatedAt),
+      syncedCount: synced.syncedCount,
+    }
   }),
 )
 
