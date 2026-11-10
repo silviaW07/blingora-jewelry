@@ -12,4 +12,5 @@ export const STAFF_PERMISSION_OPTIONS = [
   { key: 'shipping', label: '物流渠道配置' },
   { key: 'pricing', label: '促销活动管理' },
   { key: 'brandalias', label: '品牌别名管理' },
+  { key: 'suppliercollection', label: '供应商收录' },
 ] as const

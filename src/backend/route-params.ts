@@ -112,6 +112,17 @@ export const BrandAliasManagement = {
   getParams: (_sp: URLSearchParams) => ({}),
   navigateTo: (router: AppRouterInstance) => router.push(BrandAliasManagement.path),
 };
+// ================================================================
+// B23 供应商收录 — 无入参
+// ================================================================
+export const SupplierCollection = {
+  id: 'B23',
+  path: '/suppliercollection',
+  paramsMeta: {} as Record<string, ParamMeta>,
+  getParams: (_sp: URLSearchParams) => ({}),
+  navigateTo: (router: AppRouterInstance) => router.push(SupplierCollection.path),
+};
+
 
 // ================================================================
 // B04 商品管理 — 入参: name, categoryId, status, tab
@@ -440,6 +451,7 @@ export const BackendRoutes = {
   ShippingChannelConfig,
   AdminManagement,
   BrandAliasManagement,
+  SupplierCollection,
 };
 
 export const NAVIGATION_MAP: Record<string, string[]> = {
@@ -472,6 +484,7 @@ export const PAGE_ID_MAP: Record<string, string> = {
   'B16': 'ShippingChannelConfig',
   'B19': 'AdminManagement',
   'B20': 'BrandAliasManagement',
+  'B23': 'SupplierCollection',
 };
 
 /**

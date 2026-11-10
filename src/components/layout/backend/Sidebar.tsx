@@ -3,13 +3,13 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Camera, X } from 'lucide-react';
+import { LayoutDashboard, Package, Users, ShieldCheck, LogIn, UserPlus, Layers, LogOut, ChevronLeft, ChevronRight, ChevronDown, ShoppingCart, ShoppingBag, Images, LayoutGrid, Paintbrush, Home, FileText, Truck, BadgePercent, UserRound, UserCog, Tag, Link2, Camera, X } from 'lucide-react';
 import { useAdminSession } from '@/tools/BackendSession';
 import { AdminProfile } from '@/backend/route-params';
 import { formatBadgeCount, useAdminNavBadges } from '@/backend/hooks/useAdminNavBadges';
 import { getMyStaffAccess } from '@/backend/actions/AdminManagement';
 
-// 扁平化的导航配置
+// 导航配置。group 相同的项收进一个母标题，点击母标题再展开。
 const MENU_ITEMS = [{
   id: 'B01',
   label: '后台登录',
@@ -35,14 +35,33 @@ const MENU_ITEMS = [{
   href: '/productmanagement',
   icon: Package,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'products'
+  permission: 'products',
+  group: 'catalog'
 }, {
   id: 'B06',
   label: '分类管理',
   href: '/categorymanagement',
   icon: Layers,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'categories'
+  permission: 'categories',
+  group: 'catalog'
+}, {
+  id: 'B20',
+  label: '品牌别名管理',
+  href: '/brandaliasmanagement',
+  icon: Tag,
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'brandalias',
+  group: 'catalog'
+},
+{
+  id: 'B23',
+  label: '供应商收录',
+  href: '/suppliercollection',
+  icon: Link2,
+  roles: ['ADMIN', 'SUB_ADMIN'],
+  permission: 'suppliercollection',
+  group: 'catalog'
 }, {
   id: 'B07',
   label: '客户管理',
@@ -70,49 +89,52 @@ const MENU_ITEMS = [{
   href: '/bannermanagement',
   icon: Images,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'banners'
+  permission: 'banners',
+  group: 'marketing'
 }, {
   id: 'B21',
   label: '买家秀管理',
   href: '/buyershowmanagement',
   icon: Camera,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'buyershow'
+  permission: 'buyershow',
+  group: 'marketing'
 }, {
   id: 'B15',
   label: '首页推荐专区管理',
   href: '/homerecommendzonemanagement',
   icon: LayoutGrid,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'recommend'
+  permission: 'recommend',
+  group: 'marketing'
 }, {
   id: 'B16',
   label: '物流渠道配置',
   href: '/shippingchannelconfig',
   icon: Truck,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'shipping'
+  permission: 'shipping',
+  group: 'marketing'
 }, {
   id: 'B17',
   label: '促销活动管理',
   href: '/pricingpromotionmanagement',
   icon: BadgePercent,
   roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'pricing'
+  permission: 'pricing',
+  group: 'marketing'
 }, {
   id: 'B19',
   label: '管理员账号',
   href: '/adminmanagement',
   icon: UserCog,
   roles: ['ADMIN']
-}, {
-  id: 'B20',
-  label: '品牌别名管理',
-  href: '/brandaliasmanagement',
-  icon: Tag,
-  roles: ['ADMIN', 'SUB_ADMIN'],
-  permission: 'brandalias'
-}];
+}] as const;
+
+const MENU_GROUPS = {
+  catalog: { label: '主商品管理', icon: Package },
+  marketing: { label: '设计与营销', icon: Paintbrush },
+} as const;
 
 /** 前台可视化装修可编辑页面入口（新开标签页并带 ?decorate=1） */
 const DECORATE_PAGES = [
@@ -155,6 +177,7 @@ const DECORATE_PAGES = [
 ] as const;
 export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
   const router = useRouter();
 
@@ -261,9 +284,17 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
             </div>
           </div>
         ) : null}
-        {displayMenus.map((item) => {
+        {displayMenus.map((item, index) => {
+        const previous = index > 0 ? displayMenus[index - 1] : undefined;
+        const groupId = 'group' in item ? item.group : undefined;
+        const previousGroup = previous && 'group' in previous ? previous.group : undefined;
+        const showGroup = Boolean(groupId) && groupId !== previousGroup;
+        const groupMeta = groupId ? MENU_GROUPS[groupId as keyof typeof MENU_GROUPS] : undefined;
+        const groupHasActive = groupId ? displayMenus.some((entry) => 'group' in entry && entry.group === groupId && pathname.startsWith(entry.href)) : false;
+        const groupOpen = groupId ? (openGroups[groupId] ?? groupHasActive) : true;
         const isActive = pathname.startsWith(item.href);
         const Icon = item.icon;
+        const GroupIcon = groupMeta?.icon;
         const unread =
           item.href === '/usermanagement'
             ? newCustomers
@@ -271,7 +302,18 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
               ? newOrders
               : 0;
         const badge = formatBadgeCount(unread);
-        return <Link key={item.id} href={item.href} prefetch={false} onClick={() => onClose?.()} onMouseEnter={() => { if (!isActive) router.prefetch(item.href) }} data-active={isActive} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-sm transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
+        if (groupId && !groupOpen) {
+          return showGroup && groupMeta && GroupIcon ? <button key={`${groupId}-head`} type="button" className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold text-secondary-foreground hover:bg-secondary hover:text-foreground" onClick={() => setOpenGroups((prev) => ({ ...prev, [groupId]: true }))}>
+              <GroupIcon className="h-5 w-5 shrink-0" />
+              {labelsOpen ? <span className="flex min-w-0 flex-1 items-center justify-between"><span className="truncate">{groupMeta.label}</span><ChevronDown className="h-4 w-4 -rotate-90" /></span> : null}
+            </button> : null;
+        }
+        return <div key={item.id} className="contents">
+            {showGroup && groupMeta && GroupIcon ? <button type="button" className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold ${groupHasActive ? 'text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`} onClick={() => setOpenGroups((prev) => ({ ...prev, [groupId as string]: !(prev[groupId as string] ?? groupHasActive) }))}>
+              <GroupIcon className="h-5 w-5 shrink-0" />
+              {labelsOpen ? <span className="flex min-w-0 flex-1 items-center justify-between"><span className="truncate">{groupMeta.label}</span><ChevronDown className={`h-4 w-4 transition ${groupOpen ? '' : '-rotate-90'}`} /></span> : null}
+            </button> : null}
+            <Link href={item.href} prefetch={false} onClick={() => onClose?.()} onMouseEnter={() => { if (!isActive) router.prefetch(item.href) }} data-active={isActive} className={`relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${groupId && labelsOpen ? 'pl-10' : ''} ${isActive ? 'bg-primary/10 text-primary' : 'text-secondary-foreground hover:bg-secondary hover:text-foreground'}`}>
               <span className="relative shrink-0">
                 <Icon className="w-5 h-5" />
                 {!labelsOpen && badge ? (
@@ -288,7 +330,8 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
                     </span>
                   ) : null}
                 </div>}
-            </Link>;
+            </Link>
+          </div>;
       })}
       </nav>
 
