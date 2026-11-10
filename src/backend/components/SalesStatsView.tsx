@@ -16,6 +16,9 @@ const moneyText = (value: number | null | undefined) => {
   return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
+const periodAnchorId = (periodKey: string) =>
+  `sales-period-${encodeURIComponent(periodKey).replace(/%/g, '_')}`
+
 function EditableText({
   value,
   display,
@@ -164,6 +167,22 @@ export default function SalesStatsView({
     ? periodSalesLabel(selectedPeriod.label)
     : '全部合计'
 
+  const jumpToPeriod = React.useCallback((periodKey: string, toggleOff = false) => {
+    if (toggleOff && selectedPeriodKey === periodKey) {
+      setSelectedPeriodKey(null)
+      return
+    }
+    setSelectedPeriodKey(periodKey)
+    window.setTimeout(() => {
+      document.getElementById(periodAnchorId(periodKey))?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }, 40)
+  }, [selectedPeriodKey])
+
+  const periodList = summary?.periods || []
+
   return (
     <section className="min-h-screen w-full bg-[#F8FAFC] p-4 md:p-6">
       <div className="mx-auto w-full max-w-none space-y-5">
@@ -269,7 +288,7 @@ export default function SalesStatsView({
                 查看全部合计
               </button>
             ) : (
-              <div className="text-xs text-[#94A3B8]">点击下方表标题查看该月销售额</div>
+              <div className="text-xs text-[#94A3B8]">点击下方月份可跳转查看该月明细</div>
             )}
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -299,6 +318,38 @@ export default function SalesStatsView({
               </div>
             ))}
           </div>
+          {periodList.length > 0 ? (
+            <div className="rounded-xl border border-[#DBEAFE] bg-[#F8FBFF] p-3">
+              <div className="mb-2 text-xs font-semibold text-[#64748B]">按月跳转详情</div>
+              <div className="flex flex-wrap gap-2">
+                {periodList.map((period) => {
+                  const periodKey = canonicalPeriodKey(period.label, period.sortKey)
+                  const active = selectedPeriodKey === periodKey
+                  return (
+                    <button
+                      key={periodKey}
+                      type="button"
+                      onClick={() => jumpToPeriod(periodKey)}
+                      className={cn(
+                        'min-w-[148px] rounded-lg border px-3 py-2 text-left transition-colors',
+                        active
+                          ? 'border-[#2563EB] bg-[#DBEAFE] shadow-sm'
+                          : 'border-[#E2E8F0] bg-white hover:border-[#93C5FD] hover:bg-[#EFF6FF]',
+                      )}
+                      title={`跳转到 ${period.label} 明细`}
+                    >
+                      <div className="text-sm font-semibold text-[#1E3A8A]">{period.label}</div>
+                      <div className="mt-1 space-y-0.5 text-[11px] tabular-nums text-[#64748B]">
+                        <div>商品 {moneyText(period.goodsAmountTotal)}</div>
+                        <div>USD运费 {moneyText(period.usdShippingTotal)}</div>
+                        <div>成本运费 {moneyText(period.freightCostTotal)}</div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-auto rounded-xl border border-[#E2E8F0] bg-white shadow-sm">
@@ -333,11 +384,14 @@ export default function SalesStatsView({
                   const periodKey = canonicalPeriodKey(order.periodLabel, order.periodSortKey)
                   const isSelectedPeriod = selectedPeriodKey === periodKey
                   const tableToolbar = (
-                    <tr key={`toolbar-${order.periodSortKey}-${order.periodLabel}-${order.id}`}>
+                    <tr
+                      key={`toolbar-${order.periodSortKey}-${order.periodLabel}-${order.id}`}
+                      id={periodAnchorId(periodKey)}
+                    >
                       <td
                         colSpan={12}
                         className={cn(
-                          'border px-3 py-2',
+                          'border px-3 py-2 scroll-mt-24',
                           isSelectedPeriod
                             ? 'border-[#60A5FA] bg-[#DBEAFE]'
                             : 'border-[#BFDBFE] bg-[#EFF6FF]',
@@ -347,17 +401,15 @@ export default function SalesStatsView({
                           <button
                             type="button"
                             className="text-left text-sm font-semibold text-[#1E3A8A] hover:text-[#0052D9]"
-                            title="点击后在顶部展示该月销售额"
-                            onClick={() =>
-                              setSelectedPeriodKey((prev) => (prev === periodKey ? null : periodKey))
-                            }
+                            title="点击后在顶部展示该月销售额，并定位到本表"
+                            onClick={() => jumpToPeriod(periodKey, true)}
                           >
                             {order.periodLabel}
                             <span className="ml-2 font-normal text-[#64748B]">
                               {periodOrderCount(order.periodLabel, order.periodSortKey)} 笔
                             </span>
                             <span className="ml-2 font-normal text-[#0052D9]">
-                              {isSelectedPeriod ? '· 正在顶部展示' : '· 点击查看销售额'}
+                              {isSelectedPeriod ? '· 正在顶部展示' : '· 点击查看本月汇总'}
                             </span>
                           </button>
                           <div className="flex flex-wrap gap-2">
