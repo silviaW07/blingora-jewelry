@@ -187,7 +187,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击可改。日期列为订单日期；订单金额 = 商品金额 + USD运费。同步订单的商品金额跟后台订单一致，并带入运费/定金/地址/物流（合并单合计）。
+              双击可改。日期列为订单日期；订单金额 = 商品金额 + USD运费。同步取订单列表里改过的金额与运费USD（商品金额=列表金额−运费），定金/地址/物流一并带入。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
