@@ -461,7 +461,8 @@ export function useSalesStats() {
         lines: [...order.lines, { shipDate: '', freightCost: '', chargeWeight: '', remark: '' }],
       }
     })
-    persist({ ...current, orders, summary: buildSummary(orders) })
+    persist({ ...current, orders, summary: buildSummary(orders) }, true)
+    toast.success('已增加一行运费/物流，可继续填写')
   }
 
   return {

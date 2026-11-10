@@ -272,7 +272,7 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       const freightCost = text(itemLine.freightCost, 40)
       const chargeWeight = text(itemLine.chargeWeight, 40)
       const remark = text(itemLine.remark, 200)
-      if (!shipDate && !freightCost && !chargeWeight && !remark) return []
+      // 保留点「+」加出的空白包裹行，避免一保存就被清掉
       return [{ shipDate, freightCost, chargeWeight, remark }]
     })
     const goodsAmount = money(row.goodsAmount)
