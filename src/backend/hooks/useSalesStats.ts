@@ -16,6 +16,7 @@ import {
   canonicalPeriodKey,
   compareSalesOrders,
   computedOrderAmount,
+  createBlankSalesOrder,
   normalizeHeaderLabels,
   parsePeriodInfo,
   type SalesLedgerOrder,
@@ -371,6 +372,65 @@ export function useSalesStats() {
     toast.success(`已删除「${periodLabel}」`)
   }
 
+  const createBlankSheet = (rowCount = 5) => {
+    const current = detailRef.current
+    if (!current) return
+    const year = new Date().getFullYear()
+    const month = new Date().getMonth() + 1
+    const suggested = `${year}年${month}月`
+    const typed = window.prompt('新建空白工作表标题（如 2026年10月 / 2026年8-9月）', suggested)
+    if (typed == null) return
+    const label = String(typed).trim() || suggested
+    const parsed = parsePeriodInfo(label, year)
+    const periodLabel = parsed?.label || label
+    const periodSortKey = parsed?.sortKey ?? year * 100 + month
+    const key = canonicalPeriodKey(periodLabel, periodSortKey)
+    const exists = current.orders.some(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) === key,
+    )
+    if (exists) {
+      toast.error(`已有「${periodLabel}」表格，请直接在该表加行，或换一个标题`)
+      return
+    }
+    const count = Math.max(1, Math.min(30, Math.floor(Number(rowCount) || 5)))
+    const blanks = Array.from({ length: count }, () =>
+      createBlankSalesOrder({ periodLabel, periodSortKey }),
+    )
+    const orders = [...current.orders, ...blanks].sort(compareSalesOrders)
+    persist({ ...current, orders, summary: buildSummary(orders) }, true)
+    toast.success(`已新建「${periodLabel}」空白表（${count} 行），双击单元格填写`)
+  }
+
+  const addBlankOrder = (periodLabel: string, periodSortKey: number) => {
+    const current = detailRef.current
+    if (!current) return
+    const key = canonicalPeriodKey(periodLabel, periodSortKey)
+    const sample = current.orders.find(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) === key,
+    )
+    const blank = createBlankSalesOrder({
+      periodLabel: sample?.periodLabel || periodLabel,
+      periodSortKey: sample?.periodSortKey ?? periodSortKey,
+      headerLabels: sample?.headerLabels,
+    })
+    const orders = [...current.orders, blank].sort(compareSalesOrders)
+    persist({ ...current, orders, summary: buildSummary(orders) }, true)
+    toast.success('已加一行空白订单')
+  }
+
+  const addShipmentLine = (orderId: string) => {
+    const current = detailRef.current
+    if (!current) return
+    const orders = current.orders.map((order) => {
+      if (order.id !== orderId) return order
+      return {
+        ...order,
+        lines: [...order.lines, { freightCost: '', chargeWeight: '', remark: '' }],
+      }
+    })
+    persist({ ...current, orders, summary: buildSummary(orders) })
+  }
+
   return {
     state: { detail, loading, importing, saving },
     handlers: {
@@ -378,6 +438,9 @@ export function useSalesStats() {
       importSheet,
       importImage,
       clearLedger,
+      createBlankSheet,
+      addBlankOrder,
+      addShipmentLine,
       reload,
       updateMeta,
       updateOrder,

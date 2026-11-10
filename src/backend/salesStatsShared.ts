@@ -229,3 +229,36 @@ export function compareSalesOrders(a: SalesLedgerOrder, b: SalesLedgerOrder): nu
   if (labelCmp !== 0) return labelCmp
   return String(a.id).localeCompare(String(b.id))
 }
+
+export function createBlankSalesOrder(input?: {
+  periodLabel?: string
+  periodSortKey?: number
+  headerLabels?: Partial<SalesColumnLabels>
+  id?: string
+}): SalesLedgerOrder {
+  const year = new Date().getFullYear()
+  const month = new Date().getMonth() + 1
+  const fallbackLabel = `${year}年${month}月`
+  const rawLabel = String(input?.periodLabel || '').trim() || fallbackLabel
+  const parsed = parsePeriodInfo(rawLabel, year)
+  const periodLabel = parsed?.label || rawLabel
+  const periodSortKey = Number(input?.periodSortKey ?? parsed?.sortKey ?? year * 100 + month)
+  return {
+    id: input?.id || `sales-blank-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    dateText: '',
+    customerName: '',
+    phone: '',
+    address: '',
+    orderAmount: null,
+    goodsAmount: null,
+    usdShipping: null,
+    deposit: null,
+    periodLabel,
+    periodSortKey,
+    headerLabels: normalizeHeaderLabels(
+      { ...DEFAULT_COLUMN_LABELS, ...(input?.headerLabels || {}), date: periodLabel },
+      periodLabel,
+    ),
+    lines: [{ freightCost: '', chargeWeight: '', remark: '' }],
+  }
+}

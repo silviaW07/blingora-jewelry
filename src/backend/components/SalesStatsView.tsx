@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ArrowLeft, FileSpreadsheet, ImagePlus, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, ImagePlus, Plus, Table2, Trash2 } from 'lucide-react'
 import { canonicalPeriodKey } from '@/backend/salesStatsShared'
 import type { useSalesStats } from '@/backend/hooks/useSalesStats'
 import type { SalesColumnKey, SalesLedgerOrder } from '@/backend/salesStatsShared'
@@ -187,7 +187,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。导入为追加拼接；点击下方表标题可切换顶部汇总到对应月份，不再单独展示分月卡片。
+              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。可新建空白工作表手动填写；导入为追加拼接；点击下方表标题可切换顶部汇总到对应月份。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -195,6 +195,15 @@ export default function SalesStatsView({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={state.importing || state.saving || state.loading || !state.detail}
+              onClick={() => handlers.createBlankSheet(5)}
+            >
+              <Table2 className="mr-2 h-4 w-4" />
+              新建空白表
+            </Button>
             <Button type="button" variant="outline" disabled={state.importing || state.saving} onClick={() => sheetRef.current?.click()}>
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               {state.importing ? '导入中…' : '导入表格'}
@@ -295,7 +304,7 @@ export default function SalesStatsView({
               ) : orders.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="px-4 py-12 text-center text-lg text-[#94A3B8]">
-                    还没有数据。请导入表格，或上传业务表截图识别。可删除整张表或单行，不影响其它已导入的表。
+                    还没有数据。可点「新建空白表」手动填写，或导入表格 / 图片识别。
                   </td>
                 </tr>
               ) : (
@@ -342,17 +351,29 @@ export default function SalesStatsView({
                               {isSelectedPeriod ? '· 正在顶部展示' : '· 点击查看销售额'}
                             </span>
                           </button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            disabled={state.saving || state.importing}
-                            onClick={() => handlers.deletePeriod(order.periodLabel, order.periodSortKey)}
-                          >
-                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                            删除整表
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={state.saving || state.importing}
+                              onClick={() => handlers.addBlankOrder(order.periodLabel, order.periodSortKey)}
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" />
+                              加一行
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              disabled={state.saving || state.importing}
+                              onClick={() => handlers.deletePeriod(order.periodLabel, order.periodSortKey)}
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              删除整表
+                            </Button>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -478,17 +499,30 @@ export default function SalesStatsView({
                       </td>
                       {index === 0 ? (
                         <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                            disabled={state.saving || state.importing}
-                            onClick={() => handlers.deleteOrder(order.id)}
-                            title="删除该行"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex flex-col items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-[#0052D9] hover:bg-[#EFF6FF]"
+                              disabled={state.saving || state.importing}
+                              onClick={() => handlers.addShipmentLine(order.id)}
+                              title="增加包裹运费行"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                              disabled={state.saving || state.importing}
+                              onClick={() => handlers.deleteOrder(order.id)}
+                              title="删除该行"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
                       ) : null}
                     </tr>
