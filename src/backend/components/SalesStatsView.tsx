@@ -187,7 +187,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击可改。同步订单的金额、USD运费、定金、地址、客户、发货日期/运费/计费重/物流号与订单管理保持一致（合并单合计）；手工表仍可自填。
+              双击可改。日期列为订单日期。同步订单的金额、USD运费、定金、地址、客户、运费/计费重/物流号与订单管理保持一致（合并单合计）；手工表仍可自填。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -434,23 +434,15 @@ export default function SalesStatsView({
                         isBlankRow && index === 0 ? 'bg-[#FFFBEB]' : '',
                       )}
                     >
-                      <td className="border border-[#E2E8F0] px-2 py-2 text-center align-middle whitespace-nowrap">
-                        <EditableText
-                          value={line.shipDate || (index === 0 ? order.dateText : '')}
-                          placeholder={isBlankRow && index === 0 ? '新行' : '发货日期'}
-                          onCommit={(next) => {
-                            const value = next.trim()
-                            if (String(order.id || '').startsWith('order:') || index > 0 || order.lines.length > 1) {
-                              updateLine(order.id, index, { shipDate: value })
-                              if (index === 0) updateOrder(order.id, { dateText: value || order.dateText })
-                            } else {
-                              updateOrder(order.id, { dateText: value })
-                            }
-                          }}
-                        />
-                      </td>
                       {index === 0 ? (
                         <>
+                          <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle whitespace-nowrap">
+                            <EditableText
+                              value={order.dateText}
+                              placeholder={isBlankRow ? '新行' : '订单日期'}
+                              onCommit={(next) => updateOrder(order.id, { dateText: next })}
+                            />
+                          </td>
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle">
                             <EditableText
                               value={order.customerName}

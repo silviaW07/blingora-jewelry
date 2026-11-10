@@ -266,7 +266,9 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     const lines = linesRaw.flatMap((line) => {
       if (!line || typeof line !== 'object' || Array.isArray(line)) return []
       const itemLine = line as Record<string, unknown>
-      const shipDate = text(itemLine.shipDate, 20)
+      // 表头误写入的「发货日期」不当作真实日期
+      const shipDateRaw = text(itemLine.shipDate, 20)
+      const shipDate = shipDateRaw === '发货日期' || shipDateRaw === '订单日期' ? '' : shipDateRaw
       const freightCost = text(itemLine.freightCost, 40)
       const chargeWeight = text(itemLine.chargeWeight, 40)
       const remark = text(itemLine.remark, 200)
@@ -283,9 +285,10 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       },
       fallbackYear,
     )
+    const rawDateText = text(row.dateText, 40)
     const order: SalesLedgerOrder = {
       id: text(row.id, 80) || `sales-${index + 1}`,
-      dateText: text(row.dateText, 40),
+      dateText: rawDateText === '发货日期' || rawDateText === '订单日期' ? '' : rawDateText,
       customerName: text(row.customerName, 100),
       phone: text(row.phone, 40),
       address: text(row.address, 500),
@@ -1064,12 +1067,12 @@ function extractManagedSalesFields(record: BackendSalesRecord) {
     })
   }
   const { year, month, day } = shanghaiDateParts(new Date(record.createdAt))
-  const firstShip = lines.find((line) => line.shipDate)?.shipDate || ''
   return {
     year,
     month,
     day,
-    dateText: firstShip || `${month}.${day}`,
+    // 销售额日期列固定用订单日期，不用发货日期
+    dateText: `${month}.${day}`,
     customerName,
     phone,
     address,
