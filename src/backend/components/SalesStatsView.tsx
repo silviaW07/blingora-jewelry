@@ -187,7 +187,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击可改。日期列为订单日期。同步订单的金额、USD运费、定金、地址、客户、运费/计费重/物流号与订单管理保持一致（合并单合计）；手工表仍可自填。
+              双击可改。日期列为订单日期；订单金额 = 商品金额 + USD运费。同步订单的商品金额跟后台订单一致，并带入运费/定金/地址/物流（合并单合计）。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -467,9 +467,7 @@ export default function SalesStatsView({
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle font-bold tabular-nums">
                             <span
                               title={
-                                String(order.id || '').startsWith('order:')
-                                  ? '与订单管理一致：金额/运费/定金/物流同步'
-                                  : '订单金额 = 商品金额 + USD运费'
+                                '订单金额 = 商品金额 + USD运费'
                               }
                             >
                               {moneyText(order.orderAmount)}

@@ -277,7 +277,6 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     })
     const goodsAmount = money(row.goodsAmount)
     const usdShipping = money(row.usdShipping)
-    const explicitOrderAmount = money(row.orderAmount)
     const period = resolveOrderPeriod(
       {
         periodLabel: text(row.periodLabel, 40),
@@ -295,8 +294,8 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       goodsAmount,
       usdShipping,
       deposit: depositValue(row.deposit),
-      // 优先保留订单管理里改过的金额，避免被 goods+USD 覆盖
-      orderAmount: explicitOrderAmount ?? computedOrderAmount(goodsAmount, usdShipping),
+      // 订单金额始终 = 商品金额 + USD运费
+      orderAmount: computedOrderAmount(goodsAmount, usdShipping),
       periodLabel: period.periodLabel,
       periodSortKey: period.periodSortKey,
       headerLabels: normalizeHeaderLabels(row.headerLabels, period.periodLabel),
@@ -1036,13 +1035,9 @@ function extractManagedSalesFields(record: BackendSalesRecord) {
       ? (record.registerInfoJson as Record<string, unknown>)
       : {}
   const usdShipping = money(info.usdShipping) ?? decimalToMoney(record.shippingAmount)
-  const orderAmount = money(info.orderAmount) ?? decimalToMoney(record.totalAmount)
-  const goodsAmount =
-    money(info.goodsAmount) ??
-    decimalToMoney(record.subtotalAmount) ??
-    (orderAmount != null && usdShipping != null
-      ? Math.round((orderAmount - usdShipping) * 100) / 100
-      : orderAmount)
+  // 商品金额与后台订单一致：优先 subtotalAmount（订单商品金额），否则创建时填的 register.goodsAmount
+  const goodsAmount = decimalToMoney(record.subtotalAmount) ?? money(info.goodsAmount)
+  const orderAmount = computedOrderAmount(goodsAmount, usdShipping)
   const deposit = depositValue(info.depositText ?? info.deposit)
   const customerName = text(info.customerName || record.address?.recipientName || record.user.username, 100)
   const phone = text(info.phone || record.address?.phone || record.user.phone || '', 40)
@@ -1105,16 +1100,16 @@ function mapBackendOrderToSales(
       first.remark = text([first.remark, `合并${options.mergeCount}单`].filter(Boolean).join(' · '), 200)
     }
   }
-  const orderAmount = options?.orderAmount ?? fields.orderAmount
   const goodsAmount = options?.goodsAmount ?? fields.goodsAmount
   const usdShipping = options?.usdShipping ?? fields.usdShipping
+  const orderAmount = options?.orderAmount ?? computedOrderAmount(goodsAmount, usdShipping)
   return {
     id: backendSalesOrderId(record.id),
     dateText: fields.dateText,
     customerName: fields.customerName,
     phone: fields.phone,
     address: fields.address,
-    orderAmount: orderAmount ?? computedOrderAmount(goodsAmount, usdShipping),
+    orderAmount,
     goodsAmount,
     usdShipping,
     deposit: options?.deposit ?? fields.deposit,
@@ -1189,9 +1184,9 @@ async function loadBackendSyncedSalesOrders(): Promise<SalesLedgerOrder[]> {
       .map((id) => byId.get(id))
       .filter((item): item is BackendSalesRecord => Boolean(item))
     const snapshots = members.map((item) => extractManagedSalesFields(item))
-    const orderAmount = Math.round(snapshots.reduce((sum, item) => sum + (item.orderAmount || 0), 0) * 100) / 100
     const goodsAmount = Math.round(snapshots.reduce((sum, item) => sum + (item.goodsAmount || 0), 0) * 100) / 100
     const usdShipping = Math.round(snapshots.reduce((sum, item) => sum + (item.usdShipping || 0), 0) * 100) / 100
+    const orderAmount = computedOrderAmount(goodsAmount, usdShipping)
     const lines = snapshots.flatMap((item) => item.lines).filter((line) => line.shipDate || line.freightCost || line.chargeWeight || line.remark)
     const primary = extractManagedSalesFields(record as BackendSalesRecord)
     return [

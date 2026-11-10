@@ -112,16 +112,6 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 function withRecalc(order: SalesLedgerOrder): SalesLedgerOrder {
-  // 后台同步过来的行：订单金额跟订单管理 totalAmount 走，不因改商品/运费被公式覆盖
-  if (String(order.id || '').startsWith('order:')) {
-    return {
-      ...order,
-      orderAmount:
-        order.orderAmount == null
-          ? computedOrderAmount(order.goodsAmount, order.usdShipping)
-          : order.orderAmount,
-    }
-  }
   return {
     ...order,
     orderAmount: computedOrderAmount(order.goodsAmount, order.usdShipping),
