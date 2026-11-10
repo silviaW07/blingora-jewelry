@@ -12205,6 +12205,7 @@ const _BuyerShow = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5
 const _AccountCenter = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(840));
 const _homeRecommendZoneCache = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(4561));
 const _UserManagement = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(5936));
+const _SupplierCollection = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(9732));
 const _SuffixConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(8275));
 const _ShippingChannelConfig = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(2597));
 const _SalesStats = /*#__PURE__*/ _interop_require_wildcard(__webpack_require__(883));
@@ -12269,6 +12270,7 @@ const registry = {
     'src.frontend.actions.AccountCenter': _AccountCenter,
     'src.backend.actions.homeRecommendZoneCache': _homeRecommendZoneCache,
     'src.backend.actions.UserManagement': _UserManagement,
+    'src.backend.actions.SupplierCollection': _SupplierCollection,
     'src.backend.actions.SuffixConfig': _SuffixConfig,
     'src.backend.actions.ShippingChannelConfig': _ShippingChannelConfig,
     'src.backend.actions.SalesStats': _SalesStats,
@@ -31761,6 +31763,7 @@ function readRegisterInfo(raw) {
         return {
             usdShipping: null,
             depositText: '',
+            shippingAddressText: '',
             isSettled: false,
             registerCustomerName: '',
             registerPhone: '',
@@ -31793,6 +31796,7 @@ function readRegisterInfo(raw) {
     return {
         usdShipping: readUsdShipping(info),
         depositText: readDepositText(info),
+        shippingAddressText: String(info.address || '').trim().slice(0, 1000),
         isSettled: Boolean(info.isSettled === true || info.settled === true || info.cleared === true),
         registerCustomerName: String(info.customerName || '').trim().slice(0, 100),
         registerPhone: String(info.phone || '').trim().slice(0, 30),
@@ -34788,7 +34792,7 @@ function formatAddressInfo(address) {
     };
 }
 const updateOrderShippingAddress = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
-    var _order_address, _order_address1;
+    var _order_address, _order_address1, _order_address2, _order_address3, _order_address4, _order_address5, _order_address6;
     const { username } = (0, _action_utils.getAuthContext)();
     const orderId = String(input.orderId || '').trim();
     if (!orderId) throw new Error('缺少订单');
@@ -34895,10 +34899,22 @@ const updateOrderShippingAddress = (0, _staffAccess.requireStaff)('orders')((0, 
         });
         return updated;
     });
+    const resolvedAddressText = shouldUpdateAddress ? addressText : String((saved.registerInfoJson && typeof saved.registerInfoJson === 'object' && !Array.isArray(saved.registerInfoJson) ? saved.registerInfoJson.address : '') || addressText || '');
+    const formatted = formatAddressInfo(saved.address);
     return {
-        addressText: shouldUpdateAddress ? addressText : String((saved.registerInfoJson && typeof saved.registerInfoJson === 'object' && !Array.isArray(saved.registerInfoJson) ? saved.registerInfoJson.address : '') || addressText || ''),
+        addressText: resolvedAddressText,
         trackingCarrier,
-        address: formatAddressInfo(saved.address)
+        address: formatted || (resolvedAddressText ? {
+            recipientName,
+            phone,
+            countryCode: ((_order_address2 = order.address) === null || _order_address2 === void 0 ? void 0 : _order_address2.countryCode) || 'US',
+            countryName: ((_order_address3 = order.address) === null || _order_address3 === void 0 ? void 0 : _order_address3.countryName) || 'United States',
+            stateName: ((_order_address4 = order.address) === null || _order_address4 === void 0 ? void 0 : _order_address4.stateName) || null,
+            cityName: ((_order_address5 = order.address) === null || _order_address5 === void 0 ? void 0 : _order_address5.cityName) || null,
+            addressLine1: resolvedAddressText.slice(0, 255),
+            addressLine2: null,
+            postalCode: ((_order_address6 = order.address) === null || _order_address6 === void 0 ? void 0 : _order_address6.postalCode) || null
+        } : null)
     };
 }));
 const updateOrderSettled = (0, _staffAccess.requireStaff)('orders')((0, _action_utils.withResult)(async (input)=>{
@@ -41542,6 +41558,9 @@ _export(exports, {
     },
     get saveSalesStatsLedger () {
         return saveSalesStatsLedger;
+    },
+    get syncSalesStatsFromOrders () {
+        return syncSalesStatsFromOrders;
     }
 });
 const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
@@ -41562,6 +41581,20 @@ function money(value) {
     if (!textValue) return null;
     const amount = Number(textValue);
     return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
+}
+/** 定金允许文字（如「定金2000」），纯数字则存 number */ function depositValue(value) {
+    if (value == null) return null;
+    const raw = String(value).trim().slice(0, 80);
+    if (!raw) return null;
+    if (/^-?\d+(\.\d+)?$/.test(raw)) {
+        const amount = Number(raw);
+        return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : raw;
+    }
+    return raw;
+}
+function depositAsNumber(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    return money(value) || 0;
 }
 function text(value, max = 500) {
     return String(value !== null && value !== void 0 ? value : '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -41618,7 +41651,7 @@ function summarize(orders) {
         if (order.orderAmount != null) orderAmountTotal += order.orderAmount;
         if (order.goodsAmount != null) goodsAmountTotal += order.goodsAmount;
         if (order.usdShipping != null) usdShippingTotal += order.usdShipping;
-        if (order.deposit != null) depositTotal += order.deposit;
+        if (order.deposit != null) depositTotal += depositAsNumber(order.deposit);
         let orderFreight = 0;
         for (const line of order.lines){
             const cost = money(line.freightCost);
@@ -41645,7 +41678,7 @@ function summarize(orders) {
             goodsAmountTotal: Math.round(item.goodsAmountTotal * 100) / 100,
             usdShippingTotal: Math.round(item.usdShippingTotal * 100) / 100,
             freightCostTotal: Math.round(item.freightCostTotal * 100) / 100
-        })).sort((a, b)=>a.sortKey - b.sortKey || a.label.localeCompare(b.label));
+        })).sort(_salesStatsShared.comparePeriodStats);
     return {
         orderCount: orders.length,
         shipmentCount,
@@ -41737,6 +41770,7 @@ function buildSheetHeaderLabels(headers, idx, periodLabel) {
         goodsAmount: pick(idx.goodsAmount, _salesStatsShared.DEFAULT_COLUMN_LABELS.goodsAmount),
         usdShipping: pick(idx.usdShipping, _salesStatsShared.DEFAULT_COLUMN_LABELS.usdShipping),
         deposit: pick(idx.deposit, _salesStatsShared.DEFAULT_COLUMN_LABELS.deposit),
+        costFreight: _salesStatsShared.DEFAULT_COLUMN_LABELS.costFreight,
         freightCost: pick(idx.freightCost, _salesStatsShared.DEFAULT_COLUMN_LABELS.freightCost),
         chargeWeight: pick(idx.chargeWeight, _salesStatsShared.DEFAULT_COLUMN_LABELS.chargeWeight),
         remark: pick(idx.remark, _salesStatsShared.DEFAULT_COLUMN_LABELS.remark)
@@ -41752,16 +41786,23 @@ function normalizeOrders(raw) {
         const lines = linesRaw.flatMap((line)=>{
             if (!line || typeof line !== 'object' || Array.isArray(line)) return [];
             const itemLine = line;
+            const shipDate = text(itemLine.shipDate, 20);
+            const freightCost = text(itemLine.freightCost, 40);
+            const chargeWeight = text(itemLine.chargeWeight, 40);
+            const remark = text(itemLine.remark, 200);
+            if (!shipDate && !freightCost && !chargeWeight && !remark) return [];
             return [
                 {
-                    freightCost: text(itemLine.freightCost, 40),
-                    chargeWeight: text(itemLine.chargeWeight, 40),
-                    remark: text(itemLine.remark, 200)
+                    shipDate,
+                    freightCost,
+                    chargeWeight,
+                    remark
                 }
             ];
         });
         const goodsAmount = money(row.goodsAmount);
         const usdShipping = money(row.usdShipping);
+        const explicitOrderAmount = money(row.orderAmount);
         const period = resolveOrderPeriod({
             periodLabel: text(row.periodLabel, 40),
             periodSortKey: Number(row.periodSortKey) || 0
@@ -41774,20 +41815,23 @@ function normalizeOrders(raw) {
             address: text(row.address, 500),
             goodsAmount,
             usdShipping,
-            deposit: money(row.deposit),
-            orderAmount: (0, _salesStatsShared.computedOrderAmount)(goodsAmount, usdShipping),
+            deposit: depositValue(row.deposit),
+            // 优先保留订单管理里改过的金额，避免被 goods+USD 覆盖
+            orderAmount: explicitOrderAmount !== null && explicitOrderAmount !== void 0 ? explicitOrderAmount : (0, _salesStatsShared.computedOrderAmount)(goodsAmount, usdShipping),
             periodLabel: period.periodLabel,
             periodSortKey: period.periodSortKey,
             headerLabels: (0, _salesStatsShared.normalizeHeaderLabels)(row.headerLabels, period.periodLabel),
             lines: lines.length ? lines : [
                 {
+                    shipDate: '',
                     freightCost: '',
                     chargeWeight: '',
                     remark: ''
                 }
             ]
         };
-        if (!order.customerName && !order.phone && !order.address && order.goodsAmount == null && order.usdShipping == null && order.deposit == null && !order.lines.some((line)=>line.freightCost || line.chargeWeight || line.remark)) {
+        const keepBlankPlaceholder = String(order.id || '').startsWith('sales-blank-');
+        if (!keepBlankPlaceholder && !order.dateText && !order.customerName && !order.phone && !order.address && order.goodsAmount == null && order.usdShipping == null && order.deposit == null && !order.lines.some((line)=>line.shipDate || line.freightCost || line.chargeWeight || line.remark)) {
             return [];
         }
         return [
@@ -41941,9 +41985,9 @@ function resolveColumnIndexes(headers) {
         ]),
         freightCost: headerIndex(headers, [
             '运费成本',
-            '成本运费',
             '快递成本',
             '物流成本',
+            '实际运费',
             'freightcost'
         ]),
         chargeWeight: headerIndex(headers, [
@@ -41963,7 +42007,7 @@ function resolveColumnIndexes(headers) {
             '备注'
         ])
     };
-    // 业务表固定布局兜底：A日期 B姓名 C地址 D订单金额 E商品金额 F USD运费 … J运费成本 K计费重量 L订单备注
+    // 业务表固定布局兜底：A日期 B姓名 C地址 D订单金额 E商品金额 F USD运费 … J运费 K计费重量 L订单备注
     if (idx.date < 0 && headers.length >= 1) idx.date = 0;
     if (idx.namePhone < 0 && headers.length >= 2) idx.namePhone = 1;
     if (idx.address < 0 && headers.length >= 3) idx.address = 2;
@@ -41980,7 +42024,13 @@ function resolveColumnIndexes(headers) {
     if (idx.chargeWeight < 0 && headers.length >= 11) idx.chargeWeight = 10;
     if (idx.remark < 0 && headers.length >= 12) idx.remark = 11;
     if (idx.freightCost < 0) {
-        if (idx.chargeWeight >= 1) idx.freightCost = idx.chargeWeight - 1;
+        // 精确匹配「运费」，避开 USD运费列
+        const exactFreight = headers.findIndex((item, index)=>{
+            const key = normHeader(item);
+            return key === '运费' && index !== idx.usdShipping;
+        });
+        if (exactFreight >= 0) idx.freightCost = exactFreight;
+        else if (idx.chargeWeight >= 1) idx.freightCost = idx.chargeWeight - 1;
         else if (headers.length >= 10) idx.freightCost = 9;
     }
     return idx;
@@ -42180,6 +42230,7 @@ function parseAoa(aoa, sheetTitleHint = '') {
     return normalizeOrders(orders);
 }
 function fillMergedCells(sheet, XLSX) {
+    if (!sheet || typeof sheet !== 'object') return;
     const merges = Array.isArray(sheet['!merges']) ? sheet['!merges'] : [];
     for (const merge of merges){
         if (!(merge === null || merge === void 0 ? void 0 : merge.s) || !(merge === null || merge === void 0 ? void 0 : merge.e)) continue;
@@ -42202,35 +42253,175 @@ function fillMergedCells(sheet, XLSX) {
         }
     }
 }
-async function parseSpreadsheet(fileBase64, fileName = '') {
-    const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64');
-    if (!raw.length) throw new Error('表格内容为空');
-    const lower = String(fileName || '').toLowerCase();
+function sheetHasCells(sheet) {
+    if (!sheet || typeof sheet !== 'object') return false;
+    if (typeof sheet['!ref'] === 'string' && sheet['!ref'].trim()) return true;
+    return Object.keys(sheet).some((key)=>key && !key.startsWith('!'));
+}
+function cellToPlainText(value) {
+    if (value == null || value === '') return '';
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (value instanceof Date) {
+        const y = value.getFullYear();
+        const m = String(value.getMonth() + 1).padStart(2, '0');
+        const d = String(value.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+    if (typeof value === 'object') {
+        const row = value;
+        if (row.result != null) return cellToPlainText(row.result);
+        if (row.text != null) return String(row.text);
+        if (Array.isArray(row.richText)) {
+            return row.richText.map((part)=>String((part === null || part === void 0 ? void 0 : part.text) || '')).join('');
+        }
+        if (row.hyperlink != null && row.text != null) return String(row.text);
+        if (row.formula != null && row.result != null) return cellToPlainText(row.result);
+    }
+    return String(value);
+}
+function fillAoaMerges(aoa, mergeRefs) {
+    for (const ref of mergeRefs){
+        var _aoa_r1;
+        const matched = String(ref || '').trim().match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+        if (!matched) continue;
+        const colToIndex = (label)=>{
+            let n = 0;
+            const up = label.toUpperCase();
+            for(let i = 0; i < up.length; i += 1)n = n * 26 + (up.charCodeAt(i) - 64);
+            return n - 1;
+        };
+        const c1 = colToIndex(matched[1]);
+        const r1 = Number(matched[2]) - 1;
+        const c2 = colToIndex(matched[3]);
+        const r2 = Number(matched[4]) - 1;
+        if (![
+            c1,
+            r1,
+            c2,
+            r2
+        ].every((n)=>Number.isFinite(n) && n >= 0)) continue;
+        const master = String(((_aoa_r1 = aoa[r1]) === null || _aoa_r1 === void 0 ? void 0 : _aoa_r1[c1]) || '');
+        if (!master.trim()) continue;
+        for(let r = Math.min(r1, r2); r <= Math.max(r1, r2); r += 1){
+            if (!aoa[r]) aoa[r] = [];
+            for(let c = Math.min(c1, c2); c <= Math.max(c1, c2); c += 1){
+                if (!String(aoa[r][c] || '').trim()) aoa[r][c] = master;
+            }
+        }
+    }
+}
+function loadExcelJS() {
     try {
-        const XLSX = __webpack_require__(9964);
-        const workbook = XLSX.read(raw, {
-            type: 'buffer',
-            cellDates: true,
-            cellNF: false,
-            cellText: false
-        });
-        const first = workbook.Sheets[workbook.SheetNames[0]];
-        fillMergedCells(first, XLSX);
-        const aoa = XLSX.utils.sheet_to_json(first, {
+        const loaded = __webpack_require__(8608);
+        return (loaded === null || loaded === void 0 ? void 0 : loaded.default) || loaded;
+    } catch  {
+        return null;
+    }
+}
+async function parseWithExcelJS(raw, fileName) {
+    const ExcelJS = loadExcelJS();
+    if (!(ExcelJS === null || ExcelJS === void 0 ? void 0 : ExcelJS.Workbook)) throw new Error('ExcelJS unavailable');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(raw);
+    const sheets = Array.isArray(workbook.worksheets) ? workbook.worksheets : [];
+    if (!sheets.length) throw new Error('exceljs-empty');
+    const allOrders = [];
+    for (const sheet of sheets){
+        var _sheet_model;
+        if (!sheet || sheet.state === 'hidden' || sheet.state === 'veryHidden') continue;
+        const rowCount = Math.max(0, Number(sheet.rowCount) || 0);
+        const colCount = Math.max(0, Number(sheet.columnCount) || 0);
+        if (!rowCount || !colCount) continue;
+        const aoa = [];
+        for(let r = 1; r <= rowCount; r += 1){
+            const row = sheet.getRow(r);
+            const line = [];
+            for(let c = 1; c <= colCount; c += 1){
+                const cell = row.getCell(c);
+                const text = cellToPlainText(cell === null || cell === void 0 ? void 0 : cell.value);
+                line.push(text || cellToPlainText(cell === null || cell === void 0 ? void 0 : cell.text) || '');
+            }
+            if (line.some((cell)=>String(cell || '').trim())) aoa.push(line);
+            else aoa.push(line);
+        }
+        const mergeRefs = Array.isArray(sheet === null || sheet === void 0 ? void 0 : (_sheet_model = sheet.model) === null || _sheet_model === void 0 ? void 0 : _sheet_model.merges) ? sheet.model.merges : [];
+        fillAoaMerges(aoa, mergeRefs);
+        const trimmed = aoa.filter((line)=>line.some((cell)=>String(cell || '').trim()));
+        if (!trimmed.length) continue;
+        allOrders.push(...parseAoa(trimmed, fileName || String(sheet.name || '')));
+    }
+    if (!allOrders.length) throw new Error('exceljs-no-orders');
+    return allOrders;
+}
+async function parseWithXlsx(raw, fileName) {
+    const XLSX = __webpack_require__(9964);
+    const workbook = XLSX.read(raw, {
+        type: 'buffer',
+        cellDates: true,
+        cellNF: false,
+        cellText: false,
+        dense: false
+    });
+    const sheetNames = Array.isArray(workbook === null || workbook === void 0 ? void 0 : workbook.SheetNames) ? workbook.SheetNames : [];
+    const sheets = (workbook === null || workbook === void 0 ? void 0 : workbook.Sheets) && typeof workbook.Sheets === 'object' ? workbook.Sheets : {};
+    const usableNames = sheetNames.filter((name)=>sheetHasCells(sheets[name]));
+    const targetNames = usableNames.length ? usableNames : sheetNames.filter((name)=>sheets[name]);
+    if (!targetNames.length) throw new Error('xlsx-empty-sheets');
+    const allOrders = [];
+    for (const name of targetNames){
+        const sheet = sheets[name];
+        if (!sheet) continue;
+        fillMergedCells(sheet, XLSX);
+        const aoa = XLSX.utils.sheet_to_json(sheet, {
             header: 1,
             defval: '',
             raw: false,
             blankrows: false
         });
-        return parseAoa(aoa, fileName);
-    } catch (error) {
-        if (lower.endsWith('.csv')) {
-            const textBody = raw.toString('utf8');
-            const rows = textBody.split(/\r?\n/).map((line)=>line.split(','));
-            return parseAoa(rows, fileName);
-        }
-        throw error instanceof Error ? error : new Error('表格解析失败');
+        if (!Array.isArray(aoa) || !aoa.length) continue;
+        allOrders.push(...parseAoa(aoa, fileName || name));
     }
+    if (!allOrders.length) throw new Error('xlsx-no-orders');
+    return allOrders;
+}
+async function parseSpreadsheet(fileBase64, fileName = '') {
+    const raw = Buffer.from(String(fileBase64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64');
+    if (!raw.length) throw new Error('表格内容为空');
+    const lower = String(fileName || '').toLowerCase();
+    const magic = raw.subarray(0, 4).toString('hex');
+    const looksZip = magic === '504b0304' || magic === '504b0506' || magic === '504b0708';
+    const looksOle = magic === 'd0cf11e0';
+    const asTextHead = raw.subarray(0, Math.min(raw.length, 200)).toString('utf8');
+    if (lower.endsWith('.csv') || lower.endsWith('.txt')) {
+        const textBody = raw.toString('utf8');
+        return parseAoa(textBody.split(/\r?\n/).map((line)=>line.split(',')), fileName);
+    }
+    if (/<\/?(?:table|html|body)\b/i.test(asTextHead)) {
+        throw new Error('当前文件像是网页另存，请用 Excel/WPS 另存为 .xlsx 后再导入');
+    }
+    const errors = [];
+    // 与入库导入一致：xlsx 优先走 ExcelJS，兼容 WPS/合并单元格
+    if (looksZip || lower.endsWith('.xlsx') || lower.endsWith('.xlsm') || !looksOle) {
+        try {
+            return await parseWithExcelJS(raw, fileName);
+        } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
+        }
+    }
+    try {
+        return await parseWithXlsx(raw, fileName);
+    } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+    }
+    if (looksOle || lower.endsWith('.xls')) {
+        try {
+            return await parseWithXlsx(raw, fileName);
+        } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
+        }
+    }
+    const detail = errors.filter(Boolean).slice(0, 3).join(' / ');
+    throw new Error(`无法读取「${fileName || '表格'}」（${Math.round(raw.length / 1024)}KB, ${magic || '00000000'}）${detail ? `：${detail}` : ''}。请用 Excel/WPS 另存为 .xlsx 后再试`);
 }
 async function recognizeSalesImage(fileBase64) {
     var _data_choices__message, _data_choices_, _data_choices;
@@ -42304,9 +42495,332 @@ async function recognizeSalesImage(fileBase64) {
     if (!orders.length) throw new Error('图片里没有识别到销售行');
     return orders;
 }
+const SYNC_PAID_STATUSES = [
+    'PAID',
+    'PROCESSING',
+    'SHIPPED',
+    'DELIVERED'
+];
+/** 同步起点：当年 10 月 1 日（上海时区日历）及以后 */ function salesSyncStartDate(now = new Date()) {
+    var _parts_find;
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+    }).formatToParts(now);
+    const year = Number(((_parts_find = parts.find((part)=>part.type === 'year')) === null || _parts_find === void 0 ? void 0 : _parts_find.value) || now.getUTCFullYear());
+    // Asia/Shanghai = UTC+8，用 UTC 存 10-01 00:00+08 = 9-30 16:00Z
+    return new Date(Date.UTC(year, 9, 1, -8, 0, 0));
+}
+function shanghaiDateParts(value) {
+    var _parts_find, _parts_find1, _parts_find2;
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+    }).formatToParts(value);
+    const year = Number((_parts_find = parts.find((part)=>part.type === 'year')) === null || _parts_find === void 0 ? void 0 : _parts_find.value);
+    const month = Number((_parts_find1 = parts.find((part)=>part.type === 'month')) === null || _parts_find1 === void 0 ? void 0 : _parts_find1.value);
+    const day = Number((_parts_find2 = parts.find((part)=>part.type === 'day')) === null || _parts_find2 === void 0 ? void 0 : _parts_find2.value);
+    return {
+        year,
+        month,
+        day
+    };
+}
+function formatAddressFromRecord(address, fallbackText = '') {
+    if (fallbackText.trim()) return text(fallbackText, 500);
+    if (!address) return '';
+    return [
+        address.addressLine1,
+        address.addressLine2,
+        [
+            address.cityName,
+            address.stateName,
+            address.postalCode
+        ].filter(Boolean).join(', '),
+        address.countryName
+    ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+}
+function decimalToMoney(value) {
+    if (value == null) return null;
+    const amount = typeof value === 'object' && typeof value.toNumber === 'function' ? Number(value.toNumber()) : Number(value);
+    return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
+}
+const ORDER_LINK_TITLE = 'ORDER_GROUP_LINKS';
+async function readSalesOrderLinks() {
+    const setting = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: ORDER_LINK_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    const raw = setting === null || setting === void 0 ? void 0 : setting.contentJson;
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((item)=>{
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const primaryId = String(item.primaryId || '').trim();
+        const childrenRaw = item.children;
+        if (!primaryId || !Array.isArray(childrenRaw)) return [];
+        const children = childrenRaw.flatMap((child)=>{
+            if (!child || typeof child !== 'object' || Array.isArray(child)) return [];
+            const id = String(child.id || '').trim();
+            if (!id || id === primaryId) return [];
+            return [
+                id
+            ];
+        });
+        return children.length ? [
+            {
+                primaryId,
+                children
+            }
+        ] : [];
+    });
+}
+/** 从订单管理同款 registerInfo / 金额字段抽出销售额一行所需内容 */ function extractManagedSalesFields(record) {
+    var _money, _money1, _ref, _money2, _info_depositText;
+    var _record_address, _record_address1, _lines_find;
+    const info = record.registerInfoJson && typeof record.registerInfoJson === 'object' && !Array.isArray(record.registerInfoJson) ? record.registerInfoJson : {};
+    const usdShipping = (_money = money(info.usdShipping)) !== null && _money !== void 0 ? _money : decimalToMoney(record.shippingAmount);
+    const orderAmount = (_money1 = money(info.orderAmount)) !== null && _money1 !== void 0 ? _money1 : decimalToMoney(record.totalAmount);
+    const goodsAmount = (_ref = (_money2 = money(info.goodsAmount)) !== null && _money2 !== void 0 ? _money2 : decimalToMoney(record.subtotalAmount)) !== null && _ref !== void 0 ? _ref : orderAmount != null && usdShipping != null ? Math.round((orderAmount - usdShipping) * 100) / 100 : orderAmount;
+    const deposit = depositValue((_info_depositText = info.depositText) !== null && _info_depositText !== void 0 ? _info_depositText : info.deposit);
+    const customerName = text(info.customerName || ((_record_address = record.address) === null || _record_address === void 0 ? void 0 : _record_address.recipientName) || record.user.username, 100);
+    const phone = text(info.phone || ((_record_address1 = record.address) === null || _record_address1 === void 0 ? void 0 : _record_address1.phone) || record.user.phone || '', 40);
+    const address = formatAddressFromRecord(record.address, String(info.address || ''));
+    const freightLines = Array.isArray(info.freightLines) ? info.freightLines : [];
+    const lines = freightLines.flatMap((line)=>{
+        if (!line || typeof line !== 'object' || Array.isArray(line)) return [];
+        const row = line;
+        const shipDate = text(row.shipDate, 20);
+        const freightCost = text(row.freightCost, 40);
+        const chargeWeight = text(row.chargeWeight, 40);
+        const remark = text(row.remark, 200);
+        if (!shipDate && !freightCost && !chargeWeight && !remark) return [];
+        return [
+            {
+                shipDate,
+                freightCost,
+                chargeWeight,
+                remark
+            }
+        ];
+    });
+    if (!lines.length) {
+        lines.push({
+            shipDate: '',
+            freightCost: '',
+            chargeWeight: '',
+            remark: text(record.trackingNumber || '', 200)
+        });
+    }
+    const { year, month, day } = shanghaiDateParts(new Date(record.createdAt));
+    const firstShip = ((_lines_find = lines.find((line)=>line.shipDate)) === null || _lines_find === void 0 ? void 0 : _lines_find.shipDate) || '';
+    return {
+        year,
+        month,
+        day,
+        dateText: firstShip || `${month}.${day}`,
+        customerName,
+        phone,
+        address,
+        orderAmount,
+        goodsAmount,
+        usdShipping,
+        deposit,
+        lines
+    };
+}
+function mapBackendOrderToSales(record, options) {
+    var _ref, _ref1, _ref2, _ref3;
+    var _options_lines;
+    const fields = extractManagedSalesFields(record);
+    const periodLabel = `${fields.year}年${fields.month}月`;
+    const periodSortKey = fields.year * 100 + fields.month;
+    const lines = (options === null || options === void 0 ? void 0 : (_options_lines = options.lines) === null || _options_lines === void 0 ? void 0 : _options_lines.length) ? options.lines.map((line)=>({
+            ...line
+        })) : fields.lines;
+    if ((options === null || options === void 0 ? void 0 : options.mergeCount) && options.mergeCount > 1) {
+        const first = lines[0];
+        if (first && !/合并\d+单/.test(first.remark)) {
+            first.remark = text([
+                first.remark,
+                `合并${options.mergeCount}单`
+            ].filter(Boolean).join(' · '), 200);
+        }
+    }
+    const orderAmount = (_ref = options === null || options === void 0 ? void 0 : options.orderAmount) !== null && _ref !== void 0 ? _ref : fields.orderAmount;
+    const goodsAmount = (_ref1 = options === null || options === void 0 ? void 0 : options.goodsAmount) !== null && _ref1 !== void 0 ? _ref1 : fields.goodsAmount;
+    const usdShipping = (_ref2 = options === null || options === void 0 ? void 0 : options.usdShipping) !== null && _ref2 !== void 0 ? _ref2 : fields.usdShipping;
+    return {
+        id: (0, _salesStatsShared.backendSalesOrderId)(record.id),
+        dateText: fields.dateText,
+        customerName: fields.customerName,
+        phone: fields.phone,
+        address: fields.address,
+        orderAmount: orderAmount !== null && orderAmount !== void 0 ? orderAmount : (0, _salesStatsShared.computedOrderAmount)(goodsAmount, usdShipping),
+        goodsAmount,
+        usdShipping,
+        deposit: (_ref3 = options === null || options === void 0 ? void 0 : options.deposit) !== null && _ref3 !== void 0 ? _ref3 : fields.deposit,
+        periodLabel,
+        periodSortKey,
+        headerLabels: (0, _salesStatsShared.normalizeHeaderLabels)({
+            ..._salesStatsShared.DEFAULT_COLUMN_LABELS,
+            date: periodLabel
+        }, periodLabel),
+        lines
+    };
+}
+const backendOrderSelect = {
+    id: true,
+    createdAt: true,
+    subtotalAmount: true,
+    shippingAmount: true,
+    totalAmount: true,
+    trackingNumber: true,
+    registerInfoJson: true,
+    user: {
+        select: {
+            username: true,
+            phone: true
+        }
+    },
+    address: {
+        select: {
+            recipientName: true,
+            phone: true,
+            addressLine1: true,
+            addressLine2: true,
+            cityName: true,
+            stateName: true,
+            postalCode: true,
+            countryName: true
+        }
+    }
+};
+async function loadBackendSyncedSalesOrders() {
+    const startAt = salesSyncStartDate();
+    const [records, linkGroups] = await Promise.all([
+        _prisma.default.orderrecord.findMany({
+            where: {
+                status: {
+                    in: [
+                        ...SYNC_PAID_STATUSES
+                    ]
+                },
+                createdAt: {
+                    gte: startAt
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: backendOrderSelect,
+            take: 2000
+        }),
+        readSalesOrderLinks()
+    ]);
+    const byId = new Map(records.map((record)=>[
+            record.id,
+            record
+        ]));
+    const childIds = new Set(linkGroups.flatMap((group)=>group.children));
+    const missingMemberIds = Array.from(new Set(linkGroups.flatMap((group)=>[
+            group.primaryId,
+            ...group.children
+        ]).filter((id)=>!byId.has(id))));
+    if (missingMemberIds.length) {
+        const extras = await _prisma.default.orderrecord.findMany({
+            where: {
+                id: {
+                    in: missingMemberIds
+                }
+            },
+            select: backendOrderSelect
+        });
+        for (const row of extras)byId.set(row.id, row);
+    }
+    const mapped = records.flatMap((record)=>{
+        if (childIds.has(record.id)) return [];
+        const group = linkGroups.find((item)=>item.primaryId === record.id);
+        if (!group) return [
+            mapBackendOrderToSales(record)
+        ];
+        const memberIds = [
+            group.primaryId,
+            ...group.children
+        ];
+        const members = memberIds.map((id)=>byId.get(id)).filter((item)=>Boolean(item));
+        const snapshots = members.map((item)=>extractManagedSalesFields(item));
+        const orderAmount = Math.round(snapshots.reduce((sum, item)=>sum + (item.orderAmount || 0), 0) * 100) / 100;
+        const goodsAmount = Math.round(snapshots.reduce((sum, item)=>sum + (item.goodsAmount || 0), 0) * 100) / 100;
+        const usdShipping = Math.round(snapshots.reduce((sum, item)=>sum + (item.usdShipping || 0), 0) * 100) / 100;
+        const lines = snapshots.flatMap((item)=>item.lines).filter((line)=>line.shipDate || line.freightCost || line.chargeWeight || line.remark);
+        const primary = extractManagedSalesFields(record);
+        return [
+            mapBackendOrderToSales(record, {
+                orderAmount,
+                goodsAmount,
+                usdShipping,
+                deposit: primary.deposit,
+                lines: lines.length ? lines : primary.lines,
+                mergeCount: memberIds.length
+            })
+        ];
+    });
+    return normalizeOrders(mapped);
+}
+function mergeLedgerWithBackendOrders(currentOrders, syncedOrders) {
+    const manual = currentOrders.filter((order)=>!(0, _salesStatsShared.isBackendSyncedSalesOrderId)(order.id));
+    return normalizeOrders([
+        ...manual,
+        ...syncedOrders
+    ]);
+}
+async function syncLedgerFromBackendOrders(forceWrite = false) {
+    const current = await readLedger();
+    const synced = await loadBackendSyncedSalesOrders();
+    const next = mergeLedgerWithBackendOrders(current.orders, synced);
+    const before = JSON.stringify(current.orders);
+    const after = JSON.stringify(next);
+    const changed = before !== after;
+    if (changed || forceWrite) {
+        await writeLedger(next, current.meta);
+        const saved = await readLedger();
+        return {
+            orders: saved.orders,
+            meta: saved.meta,
+            updatedAt: saved.updatedAt,
+            syncedCount: synced.length,
+            changed
+        };
+    }
+    return {
+        orders: current.orders,
+        meta: current.meta,
+        updatedAt: current.updatedAt,
+        syncedCount: synced.length,
+        changed: false
+    };
+}
 const getSalesStatsDetail = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
-    const { orders, meta, updatedAt } = await readLedger();
-    return detailFrom(orders, meta, updatedAt);
+    // 打开页面时自动把 10 月及以后已付款订单同步进对应月份表
+    const synced = await syncLedgerFromBackendOrders(false);
+    return detailFrom(synced.orders, synced.meta, synced.updatedAt);
+}));
+const syncSalesStatsFromOrders = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async ()=>{
+    (0, _action_utils.getAuthContext)();
+    const synced = await syncLedgerFromBackendOrders(true);
+    return {
+        ...detailFrom(synced.orders, synced.meta, synced.updatedAt),
+        syncedCount: synced.syncedCount
+    };
 }));
 const importSalesStatsSheet = (0, _staffAccess.requireStaff)('dashboard')((0, _action_utils.withResult)(async (input)=>{
     (0, _action_utils.getAuthContext)();
@@ -42775,6 +43289,181 @@ const deleteSuffixConfig = (0, _staffAccess.requireStaff)('products')((0, _actio
             id
         }
     });
+    return {
+        success: true
+    };
+}));
+
+
+/***/ },
+
+/***/ 9732
+(__unused_webpack_module, exports, __webpack_require__) {
+
+'use server';
+"use strict";
+Object.defineProperty(exports, "__esModule", ({
+    value: true
+}));
+function _export(target, all) {
+    for(var name in all)Object.defineProperty(target, name, {
+        enumerable: true,
+        get: Object.getOwnPropertyDescriptor(all, name).get
+    });
+}
+_export(exports, {
+    get createSupplierCollection () {
+        return createSupplierCollection;
+    },
+    get deleteSupplierCollection () {
+        return deleteSupplierCollection;
+    },
+    get listSupplierCollections () {
+        return listSupplierCollections;
+    },
+    get updateSupplierCollection () {
+        return updateSupplierCollection;
+    }
+});
+const _prisma = /*#__PURE__*/ _interop_require_default(__webpack_require__(1269));
+const _staffAccess = __webpack_require__(2370);
+const _action_utils = __webpack_require__(9360);
+const _crypto = __webpack_require__(6982);
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+const LEDGER_TITLE = 'SUPPLIER_COLLECTION_V1';
+function text(value, max = 500) {
+    return String(value !== null && value !== void 0 ? value : '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+function normalizeItems(raw) {
+    if (!raw || typeof raw !== 'object') return [];
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw.items) ? raw.items : [];
+    return list.flatMap((item, index)=>{
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const row = item;
+        const supplierName = text(row.supplierName, 120);
+        const albumUrl = text(row.albumUrl, 1000);
+        if (!supplierName && !albumUrl) return [];
+        const now = new Date().toISOString();
+        return [
+            {
+                id: text(row.id, 80) || `supplier-${index + 1}`,
+                supplierName,
+                albumUrl,
+                secret: text(row.secret, 120),
+                note: text(row.note, 500),
+                createdAt: text(row.createdAt, 40) || now,
+                updatedAt: text(row.updatedAt, 40) || now
+            }
+        ];
+    }).sort((a, b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+async function readItems() {
+    const setting = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: LEDGER_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    return normalizeItems(setting === null || setting === void 0 ? void 0 : setting.contentJson);
+}
+async function writeItems(items) {
+    const payload = {
+        items: normalizeItems(items)
+    };
+    const existing = await _prisma.default.sitesetting.findFirst({
+        where: {
+            settingType: 'STATIC_COPY',
+            title: LEDGER_TITLE
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        }
+    });
+    if (existing) {
+        await _prisma.default.sitesetting.update({
+            where: {
+                id: existing.id
+            },
+            data: {
+                contentJson: payload,
+                isActive: true
+            }
+        });
+    } else {
+        await _prisma.default.sitesetting.create({
+            data: {
+                settingType: 'STATIC_COPY',
+                title: LEDGER_TITLE,
+                subtitle: 'supplier album links',
+                contentJson: payload,
+                isActive: true,
+                sortWeight: 0
+            }
+        });
+    }
+    return payload.items;
+}
+const listSupplierCollections = (0, _staffAccess.requireStaff)('suppliercollection')((0, _action_utils.withResult)(async ()=>readItems()));
+const createSupplierCollection = (0, _staffAccess.requireStaff)('suppliercollection')((0, _action_utils.withResult)(async (input)=>{
+    const supplierName = text(input === null || input === void 0 ? void 0 : input.supplierName, 120);
+    const albumUrl = text(input === null || input === void 0 ? void 0 : input.albumUrl, 1000);
+    if (!supplierName) throw new Error('请填写供应商名称');
+    if (!albumUrl) throw new Error('请填写相册链接');
+    const now = new Date().toISOString();
+    const item = {
+        id: (0, _crypto.randomUUID)(),
+        supplierName,
+        albumUrl,
+        secret: text(input === null || input === void 0 ? void 0 : input.secret, 120),
+        note: text(input === null || input === void 0 ? void 0 : input.note, 500),
+        createdAt: now,
+        updatedAt: now
+    };
+    const current = await readItems();
+    await writeItems([
+        item,
+        ...current
+    ]);
+    return item;
+}));
+const updateSupplierCollection = (0, _staffAccess.requireStaff)('suppliercollection')((0, _action_utils.withResult)(async (input)=>{
+    const id = text(input === null || input === void 0 ? void 0 : input.id, 80);
+    if (!id) throw new Error('缺少记录');
+    const supplierName = text(input === null || input === void 0 ? void 0 : input.supplierName, 120);
+    const albumUrl = text(input === null || input === void 0 ? void 0 : input.albumUrl, 1000);
+    if (!supplierName) throw new Error('请填写供应商名称');
+    if (!albumUrl) throw new Error('请填写相册链接');
+    const current = await readItems();
+    const index = current.findIndex((item)=>item.id === id);
+    if (index < 0) throw new Error('记录不存在');
+    const next = {
+        ...current[index],
+        supplierName,
+        albumUrl,
+        secret: text(input === null || input === void 0 ? void 0 : input.secret, 120),
+        note: text(input === null || input === void 0 ? void 0 : input.note, 500),
+        updatedAt: new Date().toISOString()
+    };
+    const list = [
+        ...current
+    ];
+    list[index] = next;
+    await writeItems(list);
+    return next;
+}));
+const deleteSupplierCollection = (0, _staffAccess.requireStaff)('suppliercollection')((0, _action_utils.withResult)(async (input)=>{
+    const id = text(input === null || input === void 0 ? void 0 : input.id, 80);
+    if (!id) throw new Error('缺少记录');
+    const current = await readItems();
+    if (!current.some((item)=>item.id === id)) throw new Error('记录不存在');
+    await writeItems(current.filter((item)=>item.id !== id));
     return {
         success: true
     };
@@ -49471,17 +50160,29 @@ _export(exports, {
     get DEFAULT_SALES_META () {
         return DEFAULT_SALES_META;
     },
+    get backendSalesOrderId () {
+        return backendSalesOrderId;
+    },
     get canonicalPeriodKey () {
         return canonicalPeriodKey;
     },
     get compactPeriodText () {
         return compactPeriodText;
     },
+    get comparePeriodStats () {
+        return comparePeriodStats;
+    },
     get compareSalesOrders () {
         return compareSalesOrders;
     },
     get computedOrderAmount () {
         return computedOrderAmount;
+    },
+    get createBlankSalesOrder () {
+        return createBlankSalesOrder;
+    },
+    get isBackendSyncedSalesOrderId () {
+        return isBackendSyncedSalesOrderId;
     },
     get isPeriodTitleText () {
         return isPeriodTitleText;
@@ -49494,6 +50195,9 @@ _export(exports, {
     },
     get periodSalesLabel () {
         return periodSalesLabel;
+    },
+    get sumOrderFreightCost () {
+        return sumOrderFreightCost;
     }
 });
 const DEFAULT_COLUMN_LABELS = {
@@ -49504,13 +50208,14 @@ const DEFAULT_COLUMN_LABELS = {
     goodsAmount: '商品金额',
     usdShipping: 'USD运费',
     deposit: '定金',
-    freightCost: '运费成本',
+    costFreight: '成本运费',
+    freightCost: '运费',
     chargeWeight: '计费重量',
     remark: '订单备注'
 };
 const DEFAULT_SALES_META = {
     pageTitle: '销售额统计',
-    pageHint: '格式对齐业务表：日期 / 姓名@电话 / 地址 / 订单金额 / 商品金额 / USD运费 / 定金 / 运费成本 / 计费重量 / 物流号',
+    pageHint: '格式对齐业务表：日期 / 姓名@电话 / 地址 / 订单金额 / 商品金额 / USD运费 / 定金 / 成本运费 / 运费 / 计费重量 / 物流号',
     columns: {
         ...DEFAULT_COLUMN_LABELS
     }
@@ -49518,6 +50223,18 @@ const DEFAULT_SALES_META = {
 function computedOrderAmount(goodsAmount, usdShipping) {
     if (goodsAmount == null && usdShipping == null) return null;
     return Math.round(((goodsAmount || 0) + (usdShipping || 0)) * 100) / 100;
+}
+function sumOrderFreightCost(order) {
+    let total = 0;
+    let hit = false;
+    for (const line of order.lines || []){
+        const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''));
+        if (!Number.isFinite(amount) || String(line.freightCost || '').trim() === '') continue;
+        total += amount;
+        hit = true;
+    }
+    if (!hit) return null;
+    return Math.round(total * 100) / 100;
 }
 function compactPeriodText(raw) {
     return String(raw !== null && raw !== void 0 ? raw : '').replace(/[\u00a0\u3000]/g, ' ').replace(/[\r\n\t]+/g, '').replace(/\s+/g, '').trim();
@@ -49618,10 +50335,61 @@ function periodSalesLabel(label) {
 function compareSalesOrders(a, b) {
     const ak = Number(a.periodSortKey || 0);
     const bk = Number(b.periodSortKey || 0);
-    if (ak !== bk) return ak - bk;
-    const labelCmp = String(a.periodLabel || '').localeCompare(String(b.periodLabel || ''));
+    // 近的月份排前面：10月 → 9月
+    if (ak !== bk) return bk - ak;
+    const labelCmp = String(b.periodLabel || '').localeCompare(String(a.periodLabel || ''));
     if (labelCmp !== 0) return labelCmp;
+    // 同月内：新建空白行靠前，方便立刻看见
+    const aBlank = String(a.id || '').startsWith('sales-blank-');
+    const bBlank = String(b.id || '').startsWith('sales-blank-');
+    if (aBlank !== bBlank) return aBlank ? -1 : 1;
     return String(a.id).localeCompare(String(b.id));
+}
+function comparePeriodStats(a, b) {
+    if (a.sortKey !== b.sortKey) return b.sortKey - a.sortKey;
+    return String(b.label || '').localeCompare(String(a.label || ''));
+}
+function isBackendSyncedSalesOrderId(id) {
+    return String(id || '').startsWith('order:');
+}
+function backendSalesOrderId(orderId) {
+    return `order:${String(orderId || '').trim()}`;
+}
+function createBlankSalesOrder(input) {
+    var _ref, _ref1;
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    const fallbackLabel = `${year}年${month}月`;
+    const rawLabel = String((input === null || input === void 0 ? void 0 : input.periodLabel) || '').trim() || fallbackLabel;
+    const parsed = parsePeriodInfo(rawLabel, year);
+    const periodLabel = (parsed === null || parsed === void 0 ? void 0 : parsed.label) || rawLabel;
+    const periodSortKey = Number((_ref = (_ref1 = input === null || input === void 0 ? void 0 : input.periodSortKey) !== null && _ref1 !== void 0 ? _ref1 : parsed === null || parsed === void 0 ? void 0 : parsed.sortKey) !== null && _ref !== void 0 ? _ref : year * 100 + month);
+    return {
+        id: (input === null || input === void 0 ? void 0 : input.id) || `sales-blank-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        dateText: '',
+        customerName: '',
+        phone: '',
+        address: '',
+        orderAmount: null,
+        goodsAmount: null,
+        usdShipping: null,
+        deposit: null,
+        periodLabel,
+        periodSortKey,
+        headerLabels: normalizeHeaderLabels({
+            ...DEFAULT_COLUMN_LABELS,
+            ...(input === null || input === void 0 ? void 0 : input.headerLabels) || {},
+            date: periodLabel
+        }, periodLabel),
+        lines: [
+            {
+                shipDate: '',
+                freightCost: '',
+                chargeWeight: '',
+                remark: ''
+            }
+        ]
+    };
 }
 
 
@@ -49824,6 +50592,10 @@ const STAFF_PERMISSION_OPTIONS = [
     {
         key: 'brandalias',
         label: '品牌别名管理'
+    },
+    {
+        key: 'suppliercollection',
+        label: '供应商收录'
     }
 ];
 
