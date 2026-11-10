@@ -1034,14 +1034,14 @@ function extractManagedSalesFields(record: BackendSalesRecord) {
     record.registerInfoJson && typeof record.registerInfoJson === 'object' && !Array.isArray(record.registerInfoJson)
       ? (record.registerInfoJson as Record<string, unknown>)
       : {}
-  // 以订单列表最终展示/双击改过的为准：金额=totalAmount，运费USD=register.usdShipping
-  // 不要用原始 subtotal（商品行合计）覆盖列表改价
+  // 订单列表「金额」= 商品金额（双击改的 totalAmount / register.orderAmount）
+  // 「运费USD」= register.usdShipping；销售额订单金额 = 商品金额 + 运费USD
+  // 不要用原始 subtotal，也不要把列表金额当成含运费总额再倒减
   const usdShipping = money(info.usdShipping) ?? decimalToMoney(record.shippingAmount)
-  const listTotal = money(info.orderAmount) ?? decimalToMoney(record.totalAmount)
   const goodsAmount =
-    listTotal != null
-      ? Math.round((listTotal - (usdShipping || 0)) * 100) / 100
-      : money(info.goodsAmount)
+    money(info.orderAmount) ??
+    decimalToMoney(record.totalAmount) ??
+    money(info.goodsAmount)
   const orderAmount = computedOrderAmount(goodsAmount, usdShipping)
   const deposit = depositValue(info.depositText ?? info.deposit)
   const customerName = text(info.customerName || record.address?.recipientName || record.user.username, 100)
