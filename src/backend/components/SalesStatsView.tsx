@@ -187,7 +187,7 @@ export default function SalesStatsView({
               onCommit={(next) => void handlers.updateMeta({ pageHint: next || DEFAULT_SALES_META.pageHint })}
             />
             <p className="mt-1 text-sm text-[#94A3B8]">
-              双击标题或单元格可直接修改。订单金额 = 商品金额 + USD运费。月份近的表排前面；当年 10 月及以后的已付款订单（处理中/已发货等）自动同步到对应月份表。
+              双击标题或单元格可直接修改。同步订单的「订单金额」与订单管理里改的金额一致（含合并单合计）；手工表仍可按 商品+USD运费 理解。月份近的排前面。
               {state.detail?.updatedAt
                 ? ` · 更新于 ${new Date(state.detail.updatedAt).toLocaleString('zh-CN', { hour12: false })}`
                 : ''}
@@ -465,7 +465,15 @@ export default function SalesStatsView({
                             />
                           </td>
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle font-bold tabular-nums">
-                            <span title="订单金额 = 商品金额 + USD运费">{moneyText(order.orderAmount)}</span>
+                            <span
+                              title={
+                                String(order.id || '').startsWith('order:')
+                                  ? '与订单管理页面金额一致（合并单为合计）'
+                                  : '订单金额 = 商品金额 + USD运费'
+                              }
+                            >
+                              {moneyText(order.orderAmount)}
+                            </span>
                           </td>
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle font-bold tabular-nums">
                             <EditableText

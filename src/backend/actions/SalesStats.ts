@@ -257,6 +257,7 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     })
     const goodsAmount = money(row.goodsAmount)
     const usdShipping = money(row.usdShipping)
+    const explicitOrderAmount = money(row.orderAmount)
     const period = resolveOrderPeriod(
       {
         periodLabel: text(row.periodLabel, 40),
@@ -273,7 +274,8 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       goodsAmount,
       usdShipping,
       deposit: money(row.deposit),
-      orderAmount: computedOrderAmount(goodsAmount, usdShipping),
+      // 优先保留订单管理里改过的金额，避免被 goods+USD 覆盖
+      orderAmount: explicitOrderAmount ?? computedOrderAmount(goodsAmount, usdShipping),
       periodLabel: period.periodLabel,
       periodSortKey: period.periodSortKey,
       headerLabels: normalizeHeaderLabels(row.headerLabels, period.periodLabel),
@@ -955,26 +957,59 @@ function formatAddressFromRecord(address: {
     .slice(0, 500)
 }
 
-function mapBackendOrderToSales(record: {
-  id: string
-  createdAt: Date
-  subtotalAmount: { toNumber(): number } | number
-  shippingAmount: { toNumber(): number } | number
-  totalAmount: { toNumber(): number } | number
-  trackingNumber: string | null
-  registerInfoJson: unknown
-  user: { username: string; phone: string | null }
-  address: {
-    recipientName: string
-    phone: string | null
-    addressLine1: string
-    addressLine2: string | null
-    cityName: string | null
-    stateName: string | null
-    postalCode: string | null
-    countryName: string
-  } | null
-}): SalesLedgerOrder {
+function decimalToMoney(value: { toNumber(): number } | number | null | undefined): number | null {
+  if (value == null) return null
+  const amount = typeof value === 'object' && typeof value.toNumber === 'function' ? Number(value.toNumber()) : Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null
+}
+
+const ORDER_LINK_TITLE = 'ORDER_GROUP_LINKS'
+
+async function readSalesOrderLinks(): Promise<Array<{ primaryId: string; children: string[] }>> {
+  const setting = await prisma.sitesetting.findFirst({
+    where: { settingType: 'STATIC_COPY', title: ORDER_LINK_TITLE },
+    orderBy: { updatedAt: 'desc' },
+  })
+  const raw = setting?.contentJson
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const primaryId = String((item as { primaryId?: unknown }).primaryId || '').trim()
+    const childrenRaw = (item as { children?: unknown }).children
+    if (!primaryId || !Array.isArray(childrenRaw)) return []
+    const children = childrenRaw.flatMap((child) => {
+      if (!child || typeof child !== 'object' || Array.isArray(child)) return []
+      const id = String((child as { id?: unknown }).id || '').trim()
+      if (!id || id === primaryId) return []
+      return [id]
+    })
+    return children.length ? [{ primaryId, children }] : []
+  })
+}
+
+function mapBackendOrderToSales(
+  record: {
+    id: string
+    createdAt: Date
+    subtotalAmount: { toNumber(): number } | number
+    shippingAmount: { toNumber(): number } | number
+    totalAmount: { toNumber(): number } | number
+    trackingNumber: string | null
+    registerInfoJson: unknown
+    user: { username: string; phone: string | null }
+    address: {
+      recipientName: string
+      phone: string | null
+      addressLine1: string
+      addressLine2: string | null
+      cityName: string | null
+      stateName: string | null
+      postalCode: string | null
+      countryName: string
+    } | null
+  },
+  options?: { displayOrderAmount?: number | null; mergeCount?: number },
+): SalesLedgerOrder {
   const { year, month, day } = shanghaiDateParts(new Date(record.createdAt))
   const periodLabel = `${year}年${month}月`
   const periodSortKey = year * 100 + month
@@ -985,13 +1020,20 @@ function mapBackendOrderToSales(record: {
   const customerName = text(info.customerName || record.address?.recipientName || record.user.username, 100)
   const phone = text(info.phone || record.address?.phone || record.user.phone || '', 40)
   const address = formatAddressFromRecord(record.address, String(info.address || ''))
-  const goodsAmount = money(typeof record.subtotalAmount === 'object' ? record.subtotalAmount.toNumber() : record.subtotalAmount)
-  const shippingFallback = money(
-    typeof record.shippingAmount === 'object' ? record.shippingAmount.toNumber() : record.shippingAmount,
-  )
+  const shippingFallback = decimalToMoney(record.shippingAmount)
   const usdShipping = money(info.usdShipping) ?? shippingFallback
   const deposit = money(info.depositText ?? info.deposit)
-  const orderAmount = computedOrderAmount(goodsAmount, usdShipping)
+  // 与订单管理列表一致：优先用改过的 totalAmount / registerInfo.orderAmount
+  const managedAmount =
+    options?.displayOrderAmount ??
+    money(info.orderAmount) ??
+    decimalToMoney(record.totalAmount)
+  const goodsAmount =
+    decimalToMoney(record.subtotalAmount) ??
+    (managedAmount != null && usdShipping != null
+      ? Math.round((managedAmount - usdShipping) * 100) / 100
+      : managedAmount)
+  const orderAmount = managedAmount ?? computedOrderAmount(goodsAmount, usdShipping)
   const freightLines = Array.isArray(info.freightLines) ? info.freightLines : []
   const lines: SalesShipmentLine[] = freightLines.flatMap((line) => {
     if (!line || typeof line !== 'object' || Array.isArray(line)) return []
@@ -1003,11 +1045,17 @@ function mapBackendOrderToSales(record: {
     return [{ freightCost, chargeWeight, remark }]
   })
   if (!lines.length) {
+    const mergeNote = options?.mergeCount && options.mergeCount > 1 ? `合并${options.mergeCount}单` : ''
     lines.push({
       freightCost: '',
       chargeWeight: '',
-      remark: text(record.trackingNumber || '', 200),
+      remark: text([record.trackingNumber || '', mergeNote].filter(Boolean).join(' · '), 200),
     })
+  } else if (options?.mergeCount && options.mergeCount > 1) {
+    const first = lines[0]
+    if (first && !/合并\d+单/.test(first.remark)) {
+      first.remark = text([first.remark, `合并${options.mergeCount}单`].filter(Boolean).join(' · '), 200)
+    }
   }
   return {
     id: backendSalesOrderId(record.id),
@@ -1028,37 +1076,82 @@ function mapBackendOrderToSales(record: {
 
 async function loadBackendSyncedSalesOrders(): Promise<SalesLedgerOrder[]> {
   const startAt = salesSyncStartDate()
-  const records = await prisma.orderrecord.findMany({
-    where: {
-      status: { in: [...SYNC_PAID_STATUSES] },
-      createdAt: { gte: startAt },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      createdAt: true,
-      subtotalAmount: true,
-      shippingAmount: true,
-      totalAmount: true,
-      trackingNumber: true,
-      registerInfoJson: true,
-      user: { select: { username: true, phone: true } },
-      address: {
-        select: {
-          recipientName: true,
-          phone: true,
-          addressLine1: true,
-          addressLine2: true,
-          cityName: true,
-          stateName: true,
-          postalCode: true,
-          countryName: true,
+  const [records, linkGroups] = await Promise.all([
+    prisma.orderrecord.findMany({
+      where: {
+        status: { in: [...SYNC_PAID_STATUSES] },
+        createdAt: { gte: startAt },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        subtotalAmount: true,
+        shippingAmount: true,
+        totalAmount: true,
+        trackingNumber: true,
+        registerInfoJson: true,
+        user: { select: { username: true, phone: true } },
+        address: {
+          select: {
+            recipientName: true,
+            phone: true,
+            addressLine1: true,
+            addressLine2: true,
+            cityName: true,
+            stateName: true,
+            postalCode: true,
+            countryName: true,
+          },
         },
       },
-    },
-    take: 2000,
+      take: 2000,
+    }),
+    readSalesOrderLinks(),
+  ])
+  const childIds = new Set(linkGroups.flatMap((group) => group.children))
+  const amountById = new Map<string, number>()
+  for (const record of records) {
+    const info =
+      record.registerInfoJson && typeof record.registerInfoJson === 'object' && !Array.isArray(record.registerInfoJson)
+        ? (record.registerInfoJson as Record<string, unknown>)
+        : {}
+    amountById.set(record.id, money(info.orderAmount) ?? decimalToMoney(record.totalAmount) ?? 0)
+  }
+  const missingMemberIds = Array.from(
+    new Set(
+      linkGroups
+        .flatMap((group) => [group.primaryId, ...group.children])
+        .filter((id) => !amountById.has(id)),
+    ),
+  )
+  if (missingMemberIds.length) {
+    const extras = await prisma.orderrecord.findMany({
+      where: { id: { in: missingMemberIds } },
+      select: { id: true, totalAmount: true, registerInfoJson: true },
+    })
+    for (const row of extras) {
+      const info =
+        row.registerInfoJson && typeof row.registerInfoJson === 'object' && !Array.isArray(row.registerInfoJson)
+          ? (row.registerInfoJson as Record<string, unknown>)
+          : {}
+      amountById.set(row.id, money(info.orderAmount) ?? decimalToMoney(row.totalAmount) ?? 0)
+    }
+  }
+
+  const amountOf = (id: string) => amountById.get(id) || 0
+
+  const mapped = records.flatMap((record) => {
+    if (childIds.has(record.id)) return []
+    const group = linkGroups.find((item) => item.primaryId === record.id)
+    if (group) {
+      const memberIds = [group.primaryId, ...group.children]
+      const combined = Math.round(memberIds.reduce((sum, id) => sum + amountOf(id), 0) * 100) / 100
+      return [mapBackendOrderToSales(record, { displayOrderAmount: combined, mergeCount: memberIds.length })]
+    }
+    return [mapBackendOrderToSales(record)]
   })
-  return normalizeOrders(records.map((record) => mapBackendOrderToSales(record)))
+  return normalizeOrders(mapped)
 }
 
 function mergeLedgerWithBackendOrders(
