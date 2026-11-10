@@ -444,11 +444,15 @@ export default function SalesStatsView({
                       {COLUMN_ORDER.map((column) => (
                         <th
                           key={`${order.id}-h-${column.key}`}
-                          className={cn('border border-[#CBD5E1] px-2 py-3 font-semibold', column.tone)}
+                          className={cn(
+                            'border border-[#CBD5E1] px-2 py-3 font-semibold',
+                            column.tone,
+                            column.key === 'deposit' && 'text-red-600',
+                          )}
                         >
                           <EditableText
                             value={sheetHeaders[column.key] || DEFAULT_COLUMN_LABELS[column.key]}
-                            className="font-semibold"
+                            className={cn('font-bold', column.key === 'deposit' && 'text-red-600')}
                             onCommit={(next) => {
                               if (column.key === 'date') {
                                 updateOrder(order.id, {
@@ -539,10 +543,11 @@ export default function SalesStatsView({
                               onCommit={(next) => updateOrder(order.id, { usdShipping: next.trim() === '' ? null : Number(next) })}
                             />
                           </td>
-                          <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle font-bold tabular-nums">
+                          <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle font-bold tabular-nums text-red-600">
                             <EditableText
                               value={order.deposit == null ? '' : String(order.deposit)}
                               display={order.deposit == null || order.deposit === '' ? '—' : String(order.deposit)}
+                              className="font-bold text-red-600"
                               onCommit={(next) => {
                                 const raw = next.trim()
                                 if (!raw) {
