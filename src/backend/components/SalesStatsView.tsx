@@ -424,12 +424,24 @@ export default function SalesStatsView({
                     </tr>
                   )
                   const orderCostFreight = sumOrderFreightCost(order)
+                  const isBlankRow = String(order.id || '').startsWith('sales-blank-')
                   const rows = order.lines.map((line, index) => (
-                    <tr key={`${order.id}-${index}`} className={cn(index === 0 ? 'border-t border-t-[#CBD5E1]' : '')}>
+                    <tr
+                      key={`${order.id}-${index}`}
+                      data-sales-order-id={index === 0 ? order.id : undefined}
+                      className={cn(
+                        index === 0 ? 'border-t border-t-[#CBD5E1]' : '',
+                        isBlankRow && index === 0 ? 'bg-[#FFFBEB]' : '',
+                      )}
+                    >
                       {index === 0 ? (
                         <>
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle whitespace-nowrap">
-                            <EditableText value={order.dateText} onCommit={(next) => updateOrder(order.id, { dateText: next })} />
+                            <EditableText
+                              value={order.dateText}
+                              placeholder={isBlankRow ? '新行' : undefined}
+                              onCommit={(next) => updateOrder(order.id, { dateText: next })}
+                            />
                           </td>
                           <td rowSpan={span} className="border border-[#E2E8F0] px-2 py-2 text-center align-middle">
                             <EditableText

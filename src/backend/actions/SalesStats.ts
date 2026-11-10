@@ -279,7 +279,10 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       headerLabels: normalizeHeaderLabels(row.headerLabels, period.periodLabel),
       lines: lines.length ? lines : [{ freightCost: '', chargeWeight: '', remark: '' }],
     }
+    const keepBlankPlaceholder = String(order.id || '').startsWith('sales-blank-')
     if (
+      !keepBlankPlaceholder &&
+      !order.dateText &&
       !order.customerName &&
       !order.phone &&
       !order.address &&

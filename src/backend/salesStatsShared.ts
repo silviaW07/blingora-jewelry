@@ -228,6 +228,10 @@ export function compareSalesOrders(a: SalesLedgerOrder, b: SalesLedgerOrder): nu
   if (ak !== bk) return bk - ak
   const labelCmp = String(b.periodLabel || '').localeCompare(String(a.periodLabel || ''))
   if (labelCmp !== 0) return labelCmp
+  // 同月内：新建空白行靠前，方便立刻看见
+  const aBlank = String(a.id || '').startsWith('sales-blank-')
+  const bBlank = String(b.id || '').startsWith('sales-blank-')
+  if (aBlank !== bBlank) return aBlank ? -1 : 1
   return String(a.id).localeCompare(String(b.id))
 }
 

@@ -428,9 +428,16 @@ export function useSalesStats() {
       periodSortKey: sample?.periodSortKey ?? periodSortKey,
       headerLabels: sample?.headerLabels,
     })
-    const orders = [...current.orders, blank].sort(compareSalesOrders)
+    // 插到该月第一行，保存后也不会被当成空行清掉
+    const others = current.orders.filter(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) !== key,
+    )
+    const samePeriod = current.orders.filter(
+      (order) => canonicalPeriodKey(order.periodLabel, order.periodSortKey) === key,
+    )
+    const orders = [...others, blank, ...samePeriod].sort(compareSalesOrders)
     persist({ ...current, orders, summary: buildSummary(orders) }, true)
-    toast.success('已加一行空白订单')
+    toast.success('已在本表顶部加一行空白订单，双击单元格填写')
   }
 
   const addShipmentLine = (orderId: string) => {
