@@ -1,4 +1,6 @@
 export type SalesShipmentLine = {
+  /** 发货日期，与订单管理包裹行一致 */
+  shipDate?: string
   freightCost: string
   chargeWeight: string
   remark: string
@@ -13,7 +15,8 @@ export type SalesLedgerOrder = {
   orderAmount: number | null
   goodsAmount: number | null
   usdShipping: number | null
-  deposit: number | null
+  /** 定金：与订单管理一致，可为数字或文字 */
+  deposit: number | string | null
   /** 本张表 A1/表日期原文，如图二「2026. 7月」 */
   periodLabel: string
   periodSortKey: number
@@ -277,6 +280,6 @@ export function createBlankSalesOrder(input?: {
       { ...DEFAULT_COLUMN_LABELS, ...(input?.headerLabels || {}), date: periodLabel },
       periodLabel,
     ),
-    lines: [{ freightCost: '', chargeWeight: '', remark: '' }],
+    lines: [{ shipDate: '', freightCost: '', chargeWeight: '', remark: '' }],
   }
 }

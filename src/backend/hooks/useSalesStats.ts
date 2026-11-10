@@ -43,7 +43,10 @@ function buildSummary(orders: SalesLedgerOrder[]): SalesStatsSummary {
     orderAmountTotal += order.orderAmount || 0
     goodsAmountTotal += order.goodsAmount || 0
     usdShippingTotal += order.usdShipping || 0
-    depositTotal += order.deposit || 0
+    depositTotal +=
+      typeof order.deposit === 'number'
+        ? order.deposit
+        : Number(String(order.deposit || '').replace(/[$,￥¥USD\s,]/gi, '')) || 0
     let orderFreight = 0
     for (const line of order.lines) {
       const amount = Number(String(line.freightCost || '').replace(/[$,￥¥USD\s,]/gi, ''))
@@ -334,12 +337,20 @@ export function useSalesStats() {
               : patch.usdShipping == null || Number.isNaN(Number(patch.usdShipping))
                 ? null
                 : Number(patch.usdShipping),
-          deposit:
-            patch.deposit === undefined
-              ? order.deposit
-              : patch.deposit == null || Number.isNaN(Number(patch.deposit))
-                ? null
-                : Number(patch.deposit),
+          deposit: (() => {
+            if (patch.deposit === undefined) return order.deposit
+            if (patch.deposit == null || patch.deposit === '') return null
+            if (typeof patch.deposit === 'number') {
+              return Number.isFinite(patch.deposit) ? Math.round(patch.deposit * 100) / 100 : null
+            }
+            const raw = String(patch.deposit).trim()
+            if (!raw) return null
+            if (/^-?\d+(\.\d+)?$/.test(raw)) {
+              const amount = Number(raw)
+              return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : raw
+            }
+            return raw.slice(0, 80)
+          })(),
         })
       })
       .sort(compareSalesOrders)
@@ -457,7 +468,7 @@ export function useSalesStats() {
       if (order.id !== orderId) return order
       return {
         ...order,
-        lines: [...order.lines, { freightCost: '', chargeWeight: '', remark: '' }],
+        lines: [...order.lines, { shipDate: '', freightCost: '', chargeWeight: '', remark: '' }],
       }
     })
     persist({ ...current, orders, summary: buildSummary(orders) })

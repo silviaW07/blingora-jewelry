@@ -49,6 +49,23 @@ function money(value: unknown): number | null {
   return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null
 }
 
+/** 定金允许文字（如「定金2000」），纯数字则存 number */
+function depositValue(value: unknown): number | string | null {
+  if (value == null) return null
+  const raw = String(value).trim().slice(0, 80)
+  if (!raw) return null
+  if (/^-?\d+(\.\d+)?$/.test(raw)) {
+    const amount = Number(raw)
+    return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : raw
+  }
+  return raw
+}
+
+function depositAsNumber(value: number | string | null | undefined): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  return money(value) || 0
+}
+
 function text(value: unknown, max = 500): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -96,7 +113,7 @@ function summarize(orders: SalesLedgerOrder[]): SalesStatsSummary {
     if (order.orderAmount != null) orderAmountTotal += order.orderAmount
     if (order.goodsAmount != null) goodsAmountTotal += order.goodsAmount
     if (order.usdShipping != null) usdShippingTotal += order.usdShipping
-    if (order.deposit != null) depositTotal += order.deposit
+    if (order.deposit != null) depositTotal += depositAsNumber(order.deposit)
     let orderFreight = 0
     for (const line of order.lines) {
       const cost = money(line.freightCost)
@@ -249,11 +266,12 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
     const lines = linesRaw.flatMap((line) => {
       if (!line || typeof line !== 'object' || Array.isArray(line)) return []
       const itemLine = line as Record<string, unknown>
-      return [{
-        freightCost: text(itemLine.freightCost, 40),
-        chargeWeight: text(itemLine.chargeWeight, 40),
-        remark: text(itemLine.remark, 200),
-      }]
+      const shipDate = text(itemLine.shipDate, 20)
+      const freightCost = text(itemLine.freightCost, 40)
+      const chargeWeight = text(itemLine.chargeWeight, 40)
+      const remark = text(itemLine.remark, 200)
+      if (!shipDate && !freightCost && !chargeWeight && !remark) return []
+      return [{ shipDate, freightCost, chargeWeight, remark }]
     })
     const goodsAmount = money(row.goodsAmount)
     const usdShipping = money(row.usdShipping)
@@ -273,13 +291,13 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       address: text(row.address, 500),
       goodsAmount,
       usdShipping,
-      deposit: money(row.deposit),
+      deposit: depositValue(row.deposit),
       // 优先保留订单管理里改过的金额，避免被 goods+USD 覆盖
       orderAmount: explicitOrderAmount ?? computedOrderAmount(goodsAmount, usdShipping),
       periodLabel: period.periodLabel,
       periodSortKey: period.periodSortKey,
       headerLabels: normalizeHeaderLabels(row.headerLabels, period.periodLabel),
-      lines: lines.length ? lines : [{ freightCost: '', chargeWeight: '', remark: '' }],
+      lines: lines.length ? lines : [{ shipDate: '', freightCost: '', chargeWeight: '', remark: '' }],
     }
     const keepBlankPlaceholder = String(order.id || '').startsWith('sales-blank-')
     if (
@@ -291,7 +309,7 @@ function normalizeOrders(raw: unknown): SalesLedgerOrder[] {
       order.goodsAmount == null &&
       order.usdShipping == null &&
       order.deposit == null &&
-      !order.lines.some((line) => line.freightCost || line.chargeWeight || line.remark)
+      !order.lines.some((line) => line.shipDate || line.freightCost || line.chargeWeight || line.remark)
     ) {
       return []
     }
@@ -987,79 +1005,71 @@ async function readSalesOrderLinks(): Promise<Array<{ primaryId: string; childre
   })
 }
 
-function mapBackendOrderToSales(
-  record: {
-    id: string
-    createdAt: Date
-    subtotalAmount: { toNumber(): number } | number
-    shippingAmount: { toNumber(): number } | number
-    totalAmount: { toNumber(): number } | number
-    trackingNumber: string | null
-    registerInfoJson: unknown
-    user: { username: string; phone: string | null }
-    address: {
-      recipientName: string
-      phone: string | null
-      addressLine1: string
-      addressLine2: string | null
-      cityName: string | null
-      stateName: string | null
-      postalCode: string | null
-      countryName: string
-    } | null
-  },
-  options?: { displayOrderAmount?: number | null; mergeCount?: number },
-): SalesLedgerOrder {
-  const { year, month, day } = shanghaiDateParts(new Date(record.createdAt))
-  const periodLabel = `${year}年${month}月`
-  const periodSortKey = year * 100 + month
+type BackendSalesRecord = {
+  id: string
+  createdAt: Date
+  subtotalAmount: { toNumber(): number } | number
+  shippingAmount: { toNumber(): number } | number
+  totalAmount: { toNumber(): number } | number
+  trackingNumber: string | null
+  registerInfoJson: unknown
+  user: { username: string; phone: string | null }
+  address: {
+    recipientName: string
+    phone: string | null
+    addressLine1: string
+    addressLine2: string | null
+    cityName: string | null
+    stateName: string | null
+    postalCode: string | null
+    countryName: string
+  } | null
+}
+
+/** 从订单管理同款 registerInfo / 金额字段抽出销售额一行所需内容 */
+function extractManagedSalesFields(record: BackendSalesRecord) {
   const info =
     record.registerInfoJson && typeof record.registerInfoJson === 'object' && !Array.isArray(record.registerInfoJson)
       ? (record.registerInfoJson as Record<string, unknown>)
       : {}
+  const usdShipping = money(info.usdShipping) ?? decimalToMoney(record.shippingAmount)
+  const orderAmount = money(info.orderAmount) ?? decimalToMoney(record.totalAmount)
+  const goodsAmount =
+    money(info.goodsAmount) ??
+    decimalToMoney(record.subtotalAmount) ??
+    (orderAmount != null && usdShipping != null
+      ? Math.round((orderAmount - usdShipping) * 100) / 100
+      : orderAmount)
+  const deposit = depositValue(info.depositText ?? info.deposit)
   const customerName = text(info.customerName || record.address?.recipientName || record.user.username, 100)
   const phone = text(info.phone || record.address?.phone || record.user.phone || '', 40)
   const address = formatAddressFromRecord(record.address, String(info.address || ''))
-  const shippingFallback = decimalToMoney(record.shippingAmount)
-  const usdShipping = money(info.usdShipping) ?? shippingFallback
-  const deposit = money(info.depositText ?? info.deposit)
-  // 与订单管理列表一致：优先用改过的 totalAmount / registerInfo.orderAmount
-  const managedAmount =
-    options?.displayOrderAmount ??
-    money(info.orderAmount) ??
-    decimalToMoney(record.totalAmount)
-  const goodsAmount =
-    decimalToMoney(record.subtotalAmount) ??
-    (managedAmount != null && usdShipping != null
-      ? Math.round((managedAmount - usdShipping) * 100) / 100
-      : managedAmount)
-  const orderAmount = managedAmount ?? computedOrderAmount(goodsAmount, usdShipping)
   const freightLines = Array.isArray(info.freightLines) ? info.freightLines : []
   const lines: SalesShipmentLine[] = freightLines.flatMap((line) => {
     if (!line || typeof line !== 'object' || Array.isArray(line)) return []
     const row = line as Record<string, unknown>
+    const shipDate = text(row.shipDate, 20)
     const freightCost = text(row.freightCost, 40)
     const chargeWeight = text(row.chargeWeight, 40)
-    const remark = text(row.remark || record.trackingNumber || '', 200)
-    if (!freightCost && !chargeWeight && !remark) return []
-    return [{ freightCost, chargeWeight, remark }]
+    const remark = text(row.remark, 200)
+    if (!shipDate && !freightCost && !chargeWeight && !remark) return []
+    return [{ shipDate, freightCost, chargeWeight, remark }]
   })
   if (!lines.length) {
-    const mergeNote = options?.mergeCount && options.mergeCount > 1 ? `合并${options.mergeCount}单` : ''
     lines.push({
+      shipDate: '',
       freightCost: '',
       chargeWeight: '',
-      remark: text([record.trackingNumber || '', mergeNote].filter(Boolean).join(' · '), 200),
+      remark: text(record.trackingNumber || '', 200),
     })
-  } else if (options?.mergeCount && options.mergeCount > 1) {
-    const first = lines[0]
-    if (first && !/合并\d+单/.test(first.remark)) {
-      first.remark = text([first.remark, `合并${options.mergeCount}单`].filter(Boolean).join(' · '), 200)
-    }
   }
+  const { year, month, day } = shanghaiDateParts(new Date(record.createdAt))
+  const firstShip = lines.find((line) => line.shipDate)?.shipDate || ''
   return {
-    id: backendSalesOrderId(record.id),
-    dateText: `${month}.${day}`,
+    year,
+    month,
+    day,
+    dateText: firstShip || `${month}.${day}`,
     customerName,
     phone,
     address,
@@ -1067,12 +1077,73 @@ function mapBackendOrderToSales(
     goodsAmount,
     usdShipping,
     deposit,
+    lines,
+  }
+}
+
+function mapBackendOrderToSales(
+  record: BackendSalesRecord,
+  options?: {
+    orderAmount?: number | null
+    goodsAmount?: number | null
+    usdShipping?: number | null
+    deposit?: number | string | null
+    lines?: SalesShipmentLine[]
+    mergeCount?: number
+  },
+): SalesLedgerOrder {
+  const fields = extractManagedSalesFields(record)
+  const periodLabel = `${fields.year}年${fields.month}月`
+  const periodSortKey = fields.year * 100 + fields.month
+  const lines = options?.lines?.length ? options.lines.map((line) => ({ ...line })) : fields.lines
+  if (options?.mergeCount && options.mergeCount > 1) {
+    const first = lines[0]
+    if (first && !/合并\d+单/.test(first.remark)) {
+      first.remark = text([first.remark, `合并${options.mergeCount}单`].filter(Boolean).join(' · '), 200)
+    }
+  }
+  const orderAmount = options?.orderAmount ?? fields.orderAmount
+  const goodsAmount = options?.goodsAmount ?? fields.goodsAmount
+  const usdShipping = options?.usdShipping ?? fields.usdShipping
+  return {
+    id: backendSalesOrderId(record.id),
+    dateText: fields.dateText,
+    customerName: fields.customerName,
+    phone: fields.phone,
+    address: fields.address,
+    orderAmount: orderAmount ?? computedOrderAmount(goodsAmount, usdShipping),
+    goodsAmount,
+    usdShipping,
+    deposit: options?.deposit ?? fields.deposit,
     periodLabel,
     periodSortKey,
     headerLabels: normalizeHeaderLabels({ ...DEFAULT_COLUMN_LABELS, date: periodLabel }, periodLabel),
     lines,
   }
 }
+
+const backendOrderSelect = {
+  id: true,
+  createdAt: true,
+  subtotalAmount: true,
+  shippingAmount: true,
+  totalAmount: true,
+  trackingNumber: true,
+  registerInfoJson: true,
+  user: { select: { username: true, phone: true } },
+  address: {
+    select: {
+      recipientName: true,
+      phone: true,
+      addressLine1: true,
+      addressLine2: true,
+      cityName: true,
+      stateName: true,
+      postalCode: true,
+      countryName: true,
+    },
+  },
+} as const
 
 async function loadBackendSyncedSalesOrders(): Promise<SalesLedgerOrder[]> {
   const startAt = salesSyncStartDate()
@@ -1083,73 +1154,53 @@ async function loadBackendSyncedSalesOrders(): Promise<SalesLedgerOrder[]> {
         createdAt: { gte: startAt },
       },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        createdAt: true,
-        subtotalAmount: true,
-        shippingAmount: true,
-        totalAmount: true,
-        trackingNumber: true,
-        registerInfoJson: true,
-        user: { select: { username: true, phone: true } },
-        address: {
-          select: {
-            recipientName: true,
-            phone: true,
-            addressLine1: true,
-            addressLine2: true,
-            cityName: true,
-            stateName: true,
-            postalCode: true,
-            countryName: true,
-          },
-        },
-      },
+      select: backendOrderSelect,
       take: 2000,
     }),
     readSalesOrderLinks(),
   ])
+  const byId = new Map(records.map((record) => [record.id, record as BackendSalesRecord]))
   const childIds = new Set(linkGroups.flatMap((group) => group.children))
-  const amountById = new Map<string, number>()
-  for (const record of records) {
-    const info =
-      record.registerInfoJson && typeof record.registerInfoJson === 'object' && !Array.isArray(record.registerInfoJson)
-        ? (record.registerInfoJson as Record<string, unknown>)
-        : {}
-    amountById.set(record.id, money(info.orderAmount) ?? decimalToMoney(record.totalAmount) ?? 0)
-  }
   const missingMemberIds = Array.from(
     new Set(
       linkGroups
         .flatMap((group) => [group.primaryId, ...group.children])
-        .filter((id) => !amountById.has(id)),
+        .filter((id) => !byId.has(id)),
     ),
   )
   if (missingMemberIds.length) {
     const extras = await prisma.orderrecord.findMany({
       where: { id: { in: missingMemberIds } },
-      select: { id: true, totalAmount: true, registerInfoJson: true },
+      select: backendOrderSelect,
     })
-    for (const row of extras) {
-      const info =
-        row.registerInfoJson && typeof row.registerInfoJson === 'object' && !Array.isArray(row.registerInfoJson)
-          ? (row.registerInfoJson as Record<string, unknown>)
-          : {}
-      amountById.set(row.id, money(info.orderAmount) ?? decimalToMoney(row.totalAmount) ?? 0)
-    }
+    for (const row of extras) byId.set(row.id, row as BackendSalesRecord)
   }
-
-  const amountOf = (id: string) => amountById.get(id) || 0
 
   const mapped = records.flatMap((record) => {
     if (childIds.has(record.id)) return []
     const group = linkGroups.find((item) => item.primaryId === record.id)
-    if (group) {
-      const memberIds = [group.primaryId, ...group.children]
-      const combined = Math.round(memberIds.reduce((sum, id) => sum + amountOf(id), 0) * 100) / 100
-      return [mapBackendOrderToSales(record, { displayOrderAmount: combined, mergeCount: memberIds.length })]
-    }
-    return [mapBackendOrderToSales(record)]
+    if (!group) return [mapBackendOrderToSales(record as BackendSalesRecord)]
+
+    const memberIds = [group.primaryId, ...group.children]
+    const members = memberIds
+      .map((id) => byId.get(id))
+      .filter((item): item is BackendSalesRecord => Boolean(item))
+    const snapshots = members.map((item) => extractManagedSalesFields(item))
+    const orderAmount = Math.round(snapshots.reduce((sum, item) => sum + (item.orderAmount || 0), 0) * 100) / 100
+    const goodsAmount = Math.round(snapshots.reduce((sum, item) => sum + (item.goodsAmount || 0), 0) * 100) / 100
+    const usdShipping = Math.round(snapshots.reduce((sum, item) => sum + (item.usdShipping || 0), 0) * 100) / 100
+    const lines = snapshots.flatMap((item) => item.lines).filter((line) => line.shipDate || line.freightCost || line.chargeWeight || line.remark)
+    const primary = extractManagedSalesFields(record as BackendSalesRecord)
+    return [
+      mapBackendOrderToSales(record as BackendSalesRecord, {
+        orderAmount,
+        goodsAmount,
+        usdShipping,
+        deposit: primary.deposit,
+        lines: lines.length ? lines : primary.lines,
+        mergeCount: memberIds.length,
+      }),
+    ]
   })
   return normalizeOrders(mapped)
 }
